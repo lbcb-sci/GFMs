@@ -7,3 +7,15 @@ GLMs embeddings are "biologically meaningful" or not.
 Those are described in [experiments.md](experiments.md).
 
 Additional resources (especially the dowmstream tasks) can be found in [resources.md](resources.md).
+
+#### Usage
+
+Start by getting embeddings for a certain NT version:
+```
+python -m src.embeddings --version <VERSION> --task <TASK> --batch_size <BS> --limit <LIMIT>
+```
+
+Now we can compute the distance matrices:
+```
+python -m src.distance --path <PATH_TO_EMBEDDINGS>
+```

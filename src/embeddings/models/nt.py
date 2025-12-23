@@ -47,7 +47,9 @@ def get_embeddings(model, tokenizer, sequences: list[str]):
 
     Output is [nlayers * batch, dmodel].
     '''
-    input = tokenize(tokenizer, sequences)
+
+    device = next(model.parameters()).device
+    input = tokenize(tokenizer, sequences).to(device)
     attention_mask = input != tokenizer.pad_token_id
 
     output = model(
@@ -57,8 +59,6 @@ def get_embeddings(model, tokenizer, sequences: list[str]):
         output_hidden_states=True,
     )['hidden_states']
 
-    batch = len(sequences)
-    nlayers = len(output)
     embeddings = []
     
     for layer_embeddings in output:
@@ -66,7 +66,4 @@ def get_embeddings(model, tokenizer, sequences: list[str]):
         pooled_embeddings = torch.sum(mask * layer_embeddings, dim=1) / torch.sum(mask, dim=1)
         embeddings.append(pooled_embeddings.detach().cpu().numpy())
 
-    embeddings = numpy.array(embeddings)
-    #embeddings = numpy.transpose(embeddings, (1, 0, 2))
-    #embeddings = numpy.reshape(embeddings, (nlayers*batch, -1))
-    return embeddings
+    return numpy.array(embeddings)
