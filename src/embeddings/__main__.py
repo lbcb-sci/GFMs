@@ -1,22 +1,15 @@
 import numpy
-import logging
 import argparse
 from collections import defaultdict
 
 from src.embeddings.models import nt
 from src.embeddings.datasets import genomic_benchmarks, nt_tasks 
-from src.utils import get_data_folder, device
+from src.utils import get_raw_data_folder, device, get_logger
 
 def get_dataloader(task: str, batch_size: int):
     if   task in genomic_benchmarks.TASKS: return genomic_benchmarks.get_dataloader(task, batch_size=batch_size)
     elif task in nt_tasks.TASKS:           return nt_tasks.get_dataloader(task, batch_size=batch_size)
     else: raise Exception()
-
-def get_logger():
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger(name='embeddings')
-    logger.setLevel(logging.INFO)
-    return logger
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -29,7 +22,7 @@ def get_args():
     return args
 
 def main():
-    logger = get_logger()
+    logger = get_logger('embeddings')
 
     logger.info(f' using device {device}')
 
@@ -85,7 +78,7 @@ def main():
 
     # save embeddings for reuse
 
-    data_dir = get_data_folder()
+    data_dir = get_raw_data_folder()
     filename = f'{model_version}_{task}.npy'
     final_path = data_dir / filename 
 
