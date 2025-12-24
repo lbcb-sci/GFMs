@@ -1,6 +1,7 @@
 import numpy as np
 import argparse
 import edlib
+import time
 import multiprocessing as mp
 from multiprocessing import shared_memory
 from sklearn.metrics import pairwise_distances
@@ -22,13 +23,18 @@ def get_data(path):
     return embeddings, sequences, labels
 
 def compute_demb(embeddings: np.array) -> np.array:
-    return pairwise_distances(embeddings, metric='cosine')
+    return pairwise_distances(embeddings, metric='cosine', n_jobs=-1)
 
 def compute_dfunc(labels: np.array) -> np.array:
-    return (labels[:, None] != labels[None, :]).astype(float) 
+    return pairwise_distances(labels, metric='euclidean', n_jobs=-1)
+
+def levenshtein(a, b):
+    '''Normalized levenshtein distance.'''
+    # lev dist is at most the length of the longer string
+    maxlen = max(len(a), len(b))
+    return edlib.align(a, b)['editDistance'] / maxlen
 
 def compute_dseq(sequences: list[str], chunk_size) -> np.array:
-    metric = lambda a, b: edlib.align(a, b)['editDistance']
 
     def compute_chunk(memname: str, shape: tuple, lo: int, hi: int):
         memory = shared_memory.SharedMemory(name=memname)
@@ -36,7 +42,7 @@ def compute_dseq(sequences: list[str], chunk_size) -> np.array:
 
         for i, seq1 in enumerate(sequences[lo:hi]):
             for j, seq2 in enumerate(sequences):
-                distance = metric(seq1, seq2)
+                distance = levenshtein(seq1, seq2)
                 result[lo+i, j] = distance
 
         memory.close()
@@ -83,13 +89,22 @@ def main():
     logger.info(f' number of elements = {N}')
 
     logger.info(' computing embeddings distance matrix...')
+    start = time.time()
     dmat_emb  = compute_demb(embeddings[list(embeddings.keys())[0]])
+    end = time.time()
+    logger.info(f' done in {end-start:.2f}seconds.')
 
     logger.info(' computing function distance matrix...')
-    dmat_func = compute_dfunc(labels) 
+    start = time.time()
+    dmat_func = compute_dfunc(labels.reshape(-1, 1)) 
+    end = time.time()
+    logger.info(f' done in {end-start:.2f}seconds.')
 
-    logger.info(f' computing sequences distance matrix using {N // chunk_size} processes...')
+    logger.info(f' computing sequence distance matrix using {N // chunk_size} processes...')
+    start = time.time()
     dmat_seq = compute_dseq(sequences, chunk_size=chunk_size)
+    end = time.time()
+    logger.info(f' done in {end-start:.2f}seconds.')
 
     destination = get_dist_data_folder() / args.path
     logger.info(f' saving data at {destination}...')
@@ -103,5 +118,9 @@ def main():
     np.save(destination, data, True)
 
     logger.info(f' done.')
+
+    print(dmat_emb)
+    print(dmat_seq)
+    print(dmat_func)
 
 if __name__ == '__main__': main()
