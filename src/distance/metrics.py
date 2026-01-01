@@ -1,64 +1,7 @@
-'''
 import numpy as np
+import edlib
 
-mapping = {'A': 0, 'C': 1, 'G': 2, 'T': 3}
-
-def kmer_to_index(kmer: str) -> int:
-    idx = 0
-    for ch in kmer:
-        idx = idx * 4 + mapping[ch]
-    return idx
-
-def markov_transition_matrix(sequence: str, kmer: int, laplace: bool = True):
-    counts = np.zeros(shape=(4**kmer, 4), dtype=float)
-
-    N = len(sequence)
-
-    for index in range(0, N-kmer):
-        s = sequence[index:index+kmer]
-        y = sequence[index+kmer]
-        counts[kmer_to_index(s), mapping[y]] += 1
-
-    if laplace: counts += 1.0
-
-    rowsums = np.sum(counts, axis=1, keepdims=True)
-
-    with np.errstate(divide='ignore', invalid='ignore'):
-        tmat = counts / rowsums
-        tmat[~np.isfinite(tmat)] = 0.0
-
-    return tmat
-
-def _kl(p, q, eps=1e-12):
-    p = np.clip(p, eps, 1)
-    q = np.clip(q, eps, 1)
-    p /= p.sum()
-    q /= q.sum()
-    return np.sum(p * np.log(p / q))
-
-def markov_js_distance(P, Q):
-    P = np.asarray(P, dtype=float)
-    Q = np.asarray(Q, dtype=float)
-    assert P.shape == Q.shape
-    n = P.shape[0]
-
-    d_rows = []
-    for i in range(n):
-        p = P[i]
-        q = Q[i]
-        m = 0.5 * (p + q)
-        js = 0.5 * _kl(p, m) + 0.5 * _kl(q, m)
-        d_rows.append(np.sqrt(js))  # Jensen–Shannon distance
-
-    return float(np.mean(d_rows))
-
-def markov_distance(seqA, seqB, kmer: int):
-    t1 = markov_transition_matrix(seqA, kmer)
-    t2 = markov_transition_matrix(seqB, kmer)
-    return markov_js_distance(t1, t2)
-'''
-
-import numpy as np
+eps = 1e-12
 
 _char_to_int = np.full(256, -1, dtype=np.int8)
 _char_to_int[ord('A')] = 0
@@ -75,7 +18,7 @@ def markov_transition_matrix(sequence: str, kmer: int, laplace: bool = True):
     seq = encode_seq(sequence)
     n = len(seq)
 
-    num_states = 4 ** kmer
+    num_states = 4**kmer
     counts = np.zeros((num_states, 4), dtype=float)
 
     # Rolling k-mer index: base-4 number
@@ -95,17 +38,16 @@ def markov_transition_matrix(sequence: str, kmer: int, laplace: bool = True):
         idx = (idx % base) * 4 + seq[i + kmer]
         counts[idx, seq[i + kmer]] += 1
 
-    if laplace:
-        counts += 1.0
+    if laplace: counts += 1.0
 
     rowsums = counts.sum(axis=1, keepdims=True)
     with np.errstate(divide="ignore", invalid="ignore"):
         tmat = counts / rowsums
         tmat[~np.isfinite(tmat)] = 0.0
+
     return tmat
 
-def _kl_rows(P, Q, eps=1e-12):
-    """Row-wise KL(P||Q) for 2D arrays P, Q with same shape."""
+def _kl_rows(P, Q):
     P = np.clip(P, eps, 1)
     Q = np.clip(Q, eps, 1)
     P = P / P.sum(axis=1, keepdims=True)
@@ -124,3 +66,8 @@ def markov_distance(seqA, seqB, kmer: int):
     t1 = markov_transition_matrix(seqA, kmer)
     t2 = markov_transition_matrix(seqB, kmer)
     return markov_js_distance(t1, t2)
+
+def levenshtein_distance(seqA, seqB) -> float:
+    N = max(len(seqA), len(seqB))
+    distance = edlib.align(seqA, seqB)['editDistance']
+    return float(distance) / float(N)

@@ -7,7 +7,11 @@ import multiprocessing as mp
 from multiprocessing import shared_memory
 
 from src.common import get_logger, get_raw_data_folder, get_dist_data_folder
-from .metrics import markov_distance
+
+from .metrics import (
+    markov_distance,
+    levenshtein_distance,
+)
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -105,12 +109,13 @@ def main():
     logger.info(f' computing sequence distance matrix using {N // chunk_size} processes...')
     start = time.time()
     dmat_seq = compute_dseq(lambda a, b: markov_distance(a, b, kmer_markov), sequences, chunk_size=chunk_size)
+    #dmat_seq = compute_dseq(levenshtein_distance, sequences, chunk_size=chunk_size)
     end = time.time()
     logger.info(f' done in {end-start:.2f}s.')
 
     for i in range(dmat_emb.shape[0]):
-        dmat_emb[i, i] = 0.0
-        dmat_seq[i, i] = 0.0
+        dmat_emb[i, i]  = 0.0
+        dmat_seq[i, i]  = 0.0
         dmat_func[i, i] = 0.0
 
     destination = get_dist_data_folder() / args.path
@@ -123,7 +128,6 @@ def main():
     }
 
     np.save(destination, data, True)
-
     logger.info(f' done.')
 
 if __name__ == '__main__': main()

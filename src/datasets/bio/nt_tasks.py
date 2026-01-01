@@ -34,12 +34,12 @@ def get_dataset(task: str, split: str = 'train'):
         case 'test': return NTDataset(get_test_set(task))
         case _: raise Exception()
 
-def get_dataloader(task: str, split: str = 'train', batch_size: int = 8):
+def get_dataloader(task: str, split: str, batch_size: int, num_workers: int):
     dataset = get_dataset(task, split)
     dataloader = DataLoader(
         dataset, 
         batch_size=batch_size, 
-        num_workers=batch_size,
+        num_workers=num_workers,
         shuffle=True,
     )
     return dataloader
