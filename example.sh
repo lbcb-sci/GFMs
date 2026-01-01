@@ -9,13 +9,13 @@ FILEPATH=$VERSION\_$TASK.npy
 
 echo $FILEPATH
 
-python -m src.embeddings \
+python -m src.embeddings.bio \
     --task $TASK \
     --version $VERSION \
     --batch_size 10 \
     --limit 100 \
     --layer last
 
-python -m src.distance --path $FILEPATH 
+python -m src.distance.bio --path $FILEPATH 
 
-python -m src.correlation --path $FILEPATH
+python -m src.clustering --path $FILEPATH 

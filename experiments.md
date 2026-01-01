@@ -10,13 +10,19 @@ Ideally you also have GLM embeddings from:
 
 ### Experiment 1 - Distance Correlations
 
-Build 3 distance matrices, $D_{emb}$ (cosine or other), $D_{seq}$ (any sequence dist metric) and $D_{func}$ (1 if same class 0 otherwise).
+Build 3 distance matrices, $D_{emb}$ (cosine or other), $D_{seq}$ (any sequence dist metric) and $D_{func}$.
+
+To build $D_{func}$, one option can be to train a small expert model on the task and extract its embeddings for each sequence. And use those to see if the GLM embeddings are somewhat correlated to the expert. 
 
 Show that $corr(D_{emb}, D_{seq}) >> corr(D_{emb}, D_{func})$, which should be trivial.
 
 Then use (partial) Mantel test or something similar to try to compute $corr(D_{emb}, D_{func})$ accounting for $D_{seq}$.  
 
 There seems to be alternatives to this test so we should use as many as possible to make it robust. 
+
+In a second step, perform the same experiment for NLP, with BERT for example. 
+
+That is show that in a (for example) sentiment classification task, embeddings correlate to the tokens sequence but also to the underlying "meaning". At least that would be the ideal case scenario.
 
 ### Experiment 2 - Clustering
 
@@ -28,6 +34,8 @@ The advantage here is that we can have some visualization with umap for instance
 
 Then, we can run KNN/DBSCAN over embeddings only and use Normalized Mutual Information (or any other clustering metric) to get a numeric output. 
 
+Again a parallel can be made with NLP very easily.
+
 ### Experiment 3 - Seq Features Training
 
 An ablation study where we train a model from:
@@ -35,9 +43,9 @@ An ablation study where we train a model from:
 2. embeddings alone
 3. seq features + embeddings
 
-And compare how much embeddings really add. If they were bio meaningful, they would increase the performance significantly.
+There are many ways to get "sequence features".
 
-Of course the task we train on has to relate sequences to their function. 
+And compare how much embeddings really add. If they were bio-meaningful, they would increase the performance significantly.
 
 ### Experiment 4 - Sparse Autoencoders
 

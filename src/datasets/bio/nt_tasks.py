@@ -36,7 +36,12 @@ def get_dataset(task: str, split: str = 'train'):
 
 def get_dataloader(task: str, split: str = 'train', batch_size: int = 8):
     dataset = get_dataset(task, split)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    dataloader = DataLoader(
+        dataset, 
+        batch_size=batch_size, 
+        num_workers=batch_size,
+        shuffle=True,
+    )
     return dataloader
 
 def get_train_set(task: str):

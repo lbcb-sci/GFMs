@@ -2,9 +2,10 @@ import numpy
 import argparse
 from collections import defaultdict
 
-from src.embeddings.models import nt
-from src.embeddings.datasets import genomic_benchmarks, nt_tasks 
-from src.utils import get_raw_data_folder, device, get_logger
+from src.models.bio import nt
+from src.datasets.bio import genomic_benchmarks, nt_tasks 
+
+from src.common import get_raw_data_folder, device, get_logger
 
 def get_dataloader(task: str, batch_size: int):
     if   task in genomic_benchmarks.TASKS: return genomic_benchmarks.get_dataloader(task, batch_size=batch_size)
@@ -17,7 +18,7 @@ def get_args():
     parser.add_argument('--task', type=str, required=True)
     parser.add_argument('--batch_size', type=int, required=True)
     parser.add_argument('--limit', type=int, required=False, default=None)
-    parser.add_argument('--layers', type=str, required=False, default='last')
+    parser.add_argument('--layers', type=str, required=False, default='last', choices=['last', 'all'])
     args = parser.parse_args()
     return args
 
@@ -57,18 +58,25 @@ def main():
         embeddings = nt.get_embeddings(model, tokenizer, sequences)
 
         data['labels'].extend(labels)
-        data['sequences'].extend(sequences)
+
+        #data['sequences'].extend(sequences)
+
+        data['sequences_raw'].extend(sequences)
+
+        tokenized = [tokenizer.tokenize(t) for t in sequences]
+        data['sequences_tokenized'].extend(tokenized)
 
         match layers:
 
             case 'all':
                 for layer, emb in enumerate(embeddings): 
-                    s = f'layer_{layer}'
+                    s = f'embeddings_layer_{layer}'
                     data[s].extend(emb)
 
             case 'last':
-                s = f'layer_{len(embeddings)-1}'
-                data[s].extend(embeddings[-1])
+                data['embeddings_layer_last'].extend(embeddings[-1])
+
+            case _: raise Exception()
 
         if limit is not None and (i+1) == limit: break
 

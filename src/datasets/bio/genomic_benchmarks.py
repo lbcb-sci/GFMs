@@ -17,7 +17,12 @@ def get_dataset(dataset: str, split: str = 'train'):
     download_dataset(dataset, version=0)
     return pytorch_datasets.get_dataset(dataset, split=split)
 
-def get_dataloader(task: str, split: str = 'train', batch_size: int = 8):
+def get_dataloader(task: str, split: str = 'train', batch_size: int = 8, num_workers: int = 8):
     dataset = get_dataset(task, split)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    dataloader = DataLoader(
+        dataset, 
+        batch_size=batch_size, 
+        num_workers=num_workers,
+        shuffle=True,
+    )
     return dataloader

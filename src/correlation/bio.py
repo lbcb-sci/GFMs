@@ -2,7 +2,7 @@ import argparse
 import numpy as np
 from skbio.stats.distance import mantel, DistanceMatrix
 
-from src.utils import get_dist_data_folder
+from src.common import get_dist_data_folder
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -24,7 +24,9 @@ def main():
     demb, dseq, dfunc = get_distance_matrices(data)
 
     out = mantel(demb, dfunc)
+    print('Result for corr(emb, func):')
     print(out)
+    print('Result for corr(emb, seq):')
     out = mantel(demb, dseq)
     print(out)
 
