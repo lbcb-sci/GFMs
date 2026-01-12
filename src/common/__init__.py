@@ -2,6 +2,11 @@ import torch
 import pathlib
 import logging
 
+from src.datasets import (
+    genomic_benchmarks,
+    nt_tasks,
+)
+
 def get_logger(name: str):
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(name=name)
@@ -27,5 +32,14 @@ def get_plots_folder() -> pathlib.Path:
     data_dir = get_data_folder().parent / 'plots'
     data_dir.mkdir(exist_ok=True)
     return data_dir
+
+def get_dataloader(task: str, batch_size: int, num_workers: int, split: str = 'train'):
+    func = genomic_benchmarks.get_dataloader if task in genomic_benchmarks.TASKS else nt_tasks.get_dataloader
+    return func(
+        task, 
+        split=split,
+        batch_size=batch_size, 
+        num_workers=num_workers,
+    )
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

@@ -2,18 +2,15 @@ import numpy
 import torch
 import argparse
 from collections import defaultdict
-from src.models.bio import nt
-from src.datasets.bio import genomic_benchmarks, nt_tasks 
-from src.common import get_raw_data_folder, device, get_logger
-
-def get_dataloader(task: str, batch_size: int, num_workers: int):
-    func = genomic_benchmarks.get_dataloader if task in genomic_benchmarks.TASKS else nt_tasks.get_dataloader
-    return func(
-        task, 
-        split='train',
-        batch_size=batch_size, 
-        num_workers=num_workers,
-    )
+from src.datasets import genomic_benchmarks
+from src.models import nt
+from src.datasets import nt_tasks 
+from src.common import (
+    get_raw_data_folder, 
+    device, 
+    get_logger,
+    get_dataloader,
+)
 
 def get_args():
     parser = argparse.ArgumentParser()
