@@ -1,13 +1,6 @@
 # Embeddings
 Analysis of Genomic Language Models embeddings.
 
-This repository aims to implement a series of experiments to see if 
-GLMs embeddings are "biologically meaningful" or not.
+This repository aims to implement a series of experiments to critically evaluate the field of "Genomic Foundation Models". 
 
-Those are described in [experiments.md](experiments.md).
-
-Additional resources (especially the dowmstream tasks) can be found in [resources.md](resources.md).
-
-#### Usage
-
-TODO
+[This short essay](essay.pdf) explains my current view on the subject.

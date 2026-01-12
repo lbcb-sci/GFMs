@@ -1,3 +1,0 @@
-# Resources
-
-Datasets, code, etc...
