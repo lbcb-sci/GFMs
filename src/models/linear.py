@@ -2,7 +2,8 @@ import torch
 from torch import Tensor
 from torch import nn
 
-class LinearEmb(nn.Module):
+class LinearEmbedding(nn.Module):
+    '''Logistic regression over learned embeddings.'''
     def __init__(
             self, 
             vocab_size: int,
@@ -19,7 +20,8 @@ class LinearEmb(nn.Module):
         logits = self.linear(pooled)
         return logits
 
-class LinearKmerCount(nn.Module):
+class LinearCount(nn.Module):
+    '''Logistic regression over kmer counts.'''
     def __init__(self, vocab_size: int, num_labels: int):
         super().__init__()
         self.vocab_size = vocab_size

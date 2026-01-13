@@ -4,9 +4,9 @@ from torch import multiprocessing as mp
 from torch.utils.data import DataLoader
 
 from src.common import get_dl, get_logger, device, get_results_path
+from src.datasets import genomic_benchmarks, nt_tasks
 from src.models import linear, markov
 from src.tokenizer import KmerTokenizer
-from src.datasets import genomic_benchmarks, nt_tasks
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -31,9 +31,9 @@ def compute_metrics(tp: int, fp: int, tn: int, fn: int) -> dict:
 
     return {'acc': float(acc), 'mcc': float(mcc), 'f1': float(f1)}
 
-def train_linear(dl: DataLoader, kmer: int, epochs: int) -> linear.LinearEmb:
+def train_linear(dl: DataLoader, kmer: int, epochs: int) -> linear.LinearEmbedding:
     tokenizer = KmerTokenizer(kmer)
-    model = linear.LinearKmerCount(vocab_size=tokenizer.vocab_size, num_labels=2).to(device)
+    model = linear.LinearCount(vocab_size=tokenizer.vocab_size, num_labels=2).to(device)
     lossfunc  = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters())
 
@@ -50,7 +50,7 @@ def train_linear(dl: DataLoader, kmer: int, epochs: int) -> linear.LinearEmb:
     return model.eval(), tokenizer
 
 @torch.no_grad()
-def eval_linear(dl: DataLoader, tokenizer: KmerTokenizer, model: linear.LinearEmb) -> dict:
+def eval_linear(dl: DataLoader, tokenizer: KmerTokenizer, model: linear.LinearEmbedding) -> dict:
     model = model.eval()
     all_preds = []; all_labels = []
 

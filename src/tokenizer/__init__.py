@@ -1,5 +1,5 @@
-import torch
 import itertools
+import torch
 
 class KmerTokenizer:
     '''Dummy overlapping k-mer tokenizer.'''
