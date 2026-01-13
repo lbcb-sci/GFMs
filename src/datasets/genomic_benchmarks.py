@@ -11,6 +11,8 @@ TASKS = [
     'human_ocr_ensembl',
 ]
 
+BINARY_TASKS = TASKS[:2] + TASKS[3:]
+
 def get_dataset(dataset: str, split: str = 'train'):
     assert dataset in TASKS
     assert split in ['train', 'test']

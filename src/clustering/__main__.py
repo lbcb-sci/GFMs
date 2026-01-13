@@ -8,9 +8,9 @@ from scipy.cluster.hierarchy import linkage, fcluster
 
 from src.common import (
     get_logger,
-    get_dist_data_folder, 
-    get_raw_data_folder, 
-    get_plots_folder,
+    get_dist_data_path, 
+    get_raw_data_path, 
+    get_plots_path,
 )
 
 def parse_args():
@@ -27,13 +27,13 @@ def get_distance_matrices(data, check: bool = False):
 
 def get_distance_data():
     args = parse_args()
-    path = get_dist_data_folder() / args.path
+    path = get_dist_data_path() / args.path
     data = np.load(path, allow_pickle=True)[()]
     return data
 
 def get_emb_data():
     args = parse_args()
-    path = get_raw_data_folder() / args.path
+    path = get_raw_data_path() / args.path
     data = np.load(path, allow_pickle=True)[()]
     return data
 
@@ -98,7 +98,7 @@ def main():
     ax[2].set_title('Clustering by Function (Labels)')
 
     ts = datetime.datetime.now().strftime("%m_%d_%H_%M_%S")
-    plot_path = get_plots_folder() / f'{ts}.png'
+    plot_path = get_plots_path() / f'{ts}.png'
     fig.tight_layout()
     fig.savefig(plot_path, dpi=500)
     logger.info(f' plot saved at {plot_path}.')

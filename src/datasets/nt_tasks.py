@@ -19,6 +19,8 @@ TASKS = [
     'H3K9me3',
 ]
 
+BINARY_TASKS = TASKS[:4] + TASKS[8:]
+
 class NTDataset(Dataset):
     def __init__(self, ds): self.ds = ds
 

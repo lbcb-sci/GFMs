@@ -6,10 +6,10 @@ from src.datasets import genomic_benchmarks
 from src.models import nt
 from src.datasets import nt_tasks 
 from src.common import (
-    get_raw_data_folder, 
+    get_raw_data_path, 
     device, 
     get_logger,
-    get_dataloader,
+    get_dl,
 )
 
 def get_args():
@@ -46,7 +46,7 @@ def main():
 
     # get data
     logger.info(f' loading dataset {task}...')
-    dataloader = get_dataloader(
+    dataloader = get_dl(
         task=task, 
         batch_size=batch_size, 
         num_workers=num_workers,
@@ -86,7 +86,7 @@ def main():
         data[key] = numpy.array(data[key])
 
     # save embeddings for reuse
-    data_dir = get_raw_data_folder()
+    data_dir = get_raw_data_path()
     filename = f'{model_version}_{task}.npy'
     final_path = data_dir / filename 
 

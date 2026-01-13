@@ -1,4 +1,4 @@
 #!/bin/bash
 
-rm -rf $HOME/embeddings/data
-rm -rf $HOME/embeddings/plots
+rm -rf $PWD/../data
+rm -rf $PWD/../plots

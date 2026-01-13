@@ -2,7 +2,7 @@ import argparse
 import numpy as np
 from skbio.stats.distance import mantel, DistanceMatrix
 
-from src.common import get_dist_data_folder
+from src.common import get_dist_data_path
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -18,7 +18,7 @@ def get_distance_matrices(data):
 def main():
     args = parse_args()
 
-    path = get_dist_data_folder() / args.path
+    path = get_dist_data_path() / args.path
     data = np.load(path, allow_pickle=True)[()]
 
     demb, dseq, dfunc = get_distance_matrices(data)

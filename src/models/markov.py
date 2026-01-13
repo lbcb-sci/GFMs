@@ -1,7 +1,7 @@
+import itertools
+import numpy as np
 import torch
 from torch import nn
-import numpy as np
-import itertools
 
 class MarkovChain(nn.Module):
     def __init__(self, kmer: int):
@@ -19,12 +19,14 @@ class MarkovChain(nn.Module):
 
         for sequence in sequences:
             sequence = sequence.upper()
+
             for idx in range(len(sequence) - self.kmer):
-                ctx = sequence[idx:idx + self.kmer]
-                nxt = sequence[idx + self.kmer]
-                if ctx not in self.kmer2idx: continue # skip invalid k-mers if present
-                row = self.kmer2idx[ctx]
-                col = self.vocab.index(nxt)
+                kmer = sequence[idx:idx+self.kmer]
+                next = sequence[idx+self.kmer]
+                if kmer not in self.kmer2idx or next not in self.vocab:
+                    continue
+                row = self.kmer2idx[kmer]
+                col = self.vocab.index(next)
                 counts[row, col] += 1
 
         if smoothing:
@@ -35,3 +37,21 @@ class MarkovChain(nn.Module):
             tmat = counts / row_sums
 
         self.tmat = tmat
+
+    def ll(self, sequence: str) -> float:
+        sequence = sequence.upper()
+        result = 0.0
+        n_transitions = 0
+
+        for idx in range(len(sequence) - self.kmer):
+            kmer = sequence[idx:idx + self.kmer]
+            next = sequence[idx + self.kmer]
+            if kmer not in self.kmer2idx or next not in self.vocab:
+                continue
+            row = self.kmer2idx[kmer]
+            col = self.vocab.index(next)
+            result += np.log(self.tmat[row, col])
+            n_transitions += 1
+
+        if n_transitions == 0: return float("-inf")
+        return result / n_transitions

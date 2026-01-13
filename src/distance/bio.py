@@ -6,7 +6,7 @@ from sklearn.metrics import pairwise_distances
 import multiprocessing as mp
 from multiprocessing import shared_memory
 
-from src.common import get_logger, get_raw_data_folder, get_dist_data_folder
+from src.common import get_logger, get_raw_data_path, get_dist_data_path
 
 from .metrics import (
     markov_distance,
@@ -84,7 +84,7 @@ def main():
     kmer_markov = args.kmer_markov
     chunk_size = args.chunk_size
 
-    path = get_raw_data_folder() / args.path
+    path = get_raw_data_path() / args.path
 
     logger.info(f' loading data at {path}...')
     embeddings, sequences, sequences_tok, labels = get_data(path)
@@ -118,7 +118,7 @@ def main():
         dmat_seq[i, i]  = 0.0
         dmat_func[i, i] = 0.0
 
-    destination = get_dist_data_folder() / args.path
+    destination = get_dist_data_path() / args.path
     logger.info(f' saving data at {destination}...')
 
     data = {
