@@ -34,7 +34,7 @@ def get_plots_path() -> pathlib.Path:
     return data_dir
 
 def get_results_path() -> pathlib.Path: 
-    data_dir = get_data_path().parent / 'results'
+    data_dir = pathlib.Path(__file__).resolve().parent.parent.parent / 'results'
     data_dir.mkdir(exist_ok=True)
     return data_dir
 

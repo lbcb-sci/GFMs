@@ -1,6 +1,6 @@
 import argparse
-
 import torch
+from torch import multiprocessing as mp
 from torch.utils.data import DataLoader
 
 from src.common import get_dl, get_logger, device, get_results_path
@@ -11,8 +11,9 @@ from src.datasets import genomic_benchmarks, nt_tasks
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--benchmark', type=str, required=True, choices=['gb', 'nt'])
-    parser.add_argument('--epochs', type=int, required=True)
-    parser.add_argument('--kmers', type=int, nargs='+', required=True)
+    parser.add_argument('--epochs', type=int, required=False, default=10)
+    parser.add_argument('--kmer_from', type=int, required=False, default=1)
+    parser.add_argument('--kmer_to', type=int, required=False, default=10)
     parser.add_argument('--batch_size', type=int, required=False, default=128)
     parser.add_argument('--num_workers_dl', type=int, required=False, default=0)
     return parser.parse_args()
@@ -56,7 +57,7 @@ def eval_linear(dl: DataLoader, tokenizer: KmerTokenizer, model: linear.LinearEm
     for _, (sequences, labels) in enumerate(dl):
         tokens = tokenizer(sequences).to(device)
         logits = model(tokens)
-        preds  = torch.softmax(logits, dim=-1).argmax(dim=-1)
+        preds  = torch.softmax(logits, dim=-1).argmax(dim=1)
         all_preds.append(preds.cpu())
         all_labels.append(labels.cpu())
 
@@ -112,12 +113,10 @@ def run_kmer(dl: DataLoader, dl_test: DataLoader, kmer: int, epochs: int) -> dic
 
     markov = train_markov(dl, kmer)
     result_markov = eval_markov(dl_test, markov)
-
+    
     return {'kmer': kmer, 'linear': result_linear, 'markov': result_markov}
 
 def main():
-    torch.multiprocessing.set_sharing_strategy('file_system')
-
     logger = get_logger('benchmarks')
     logger.info(f' using device {device}')
 
@@ -125,7 +124,8 @@ def main():
     logger.info(f' args = {args}')
     benchmark = args.benchmark
     epochs = args.epochs
-    kmers = args.kmers
+    kmer_from = args.kmer_from
+    kmer_to = args.kmer_to
     batch_size = args.batch_size
     num_workers_dl = args.num_workers_dl
 
@@ -142,9 +142,9 @@ def main():
 
         logger.info(' running train and eval...')
 
-        ctx = torch.multiprocessing.get_context("spawn")
-        with ctx.Pool(processes=torch.multiprocessing.cpu_count()) as pool:
-            args = [(dl, dl_test, kmer, epochs) for kmer in kmers]
+        ctx = mp.get_context("spawn")
+        with ctx.Pool(processes=mp.cpu_count()) as pool:
+            args = [(dl, dl_test, kmer, epochs) for kmer in range(kmer_from, kmer_to+1)]
             results = pool.starmap(run_kmer, args)
 
         best_linear = max(results, key=lambda r: r["linear"]["mcc"])
@@ -165,5 +165,5 @@ def main():
         logger.info(f' {task} done.')
 
 if __name__ == '__main__': 
-    torch.multiprocessing.set_start_method("spawn", force=True)
+    mp.set_start_method("spawn", force=True)
     main()
