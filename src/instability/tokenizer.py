@@ -1,8 +1,8 @@
 from tokenizers import Tokenizer
 from tokenizers.models import BPE
-from tokenizers.pre_tokenizers import Whitespace
 from tokenizers.trainers import BpeTrainer
 from transformers import PreTrainedTokenizerFast
+from tokenizers.pre_tokenizers import Whitespace
 
 UNK_TOKEN  = '<unk>'
 PAD_TOKEN  = '<pad>'

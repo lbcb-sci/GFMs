@@ -5,6 +5,8 @@ __pycache__/
 
 trainer_output
 
+models
+
 .python-version
 results
 

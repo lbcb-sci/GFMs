@@ -18,6 +18,11 @@ def get_data_path():
     data_dir.mkdir(exist_ok=True)
     return data_dir
 
+def get_models_path():
+    data_dir = pathlib.Path(__file__).resolve().parent.parent.parent / 'models'
+    data_dir.mkdir(exist_ok=True)
+    return data_dir
+
 def get_raw_data_path() -> pathlib.Path: 
     data_dir = get_data_path() / 'raw'
     data_dir.mkdir(exist_ok=True)
