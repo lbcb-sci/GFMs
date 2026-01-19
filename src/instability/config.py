@@ -2,17 +2,16 @@ import torch
 from transformers import BertConfig, TrainingArguments 
 
 train_args = {
-    'epochs': 20, # train for that many epochs if no early stopping
-    'batch_size': 512,
-    'max_length': 256, # max sequence length, same for both models
+    'epochs': 10, # train for that many epochs if no early stopping
+    'batch_size': 128,
+    'max_length': 512, # max sequence length, same for both models
     'train_size': 200_000, # number of sequences in training set
     'eval_size': 5_000, # number of sequences in val set
     'config': BertConfig(
-        vocab_size=int(4**5),
-        hidden_size=256,
-        num_hidden_layers=6,
+        hidden_size=512,
+        intermediate_size=1024,
+        num_hidden_layers=8,
         num_attention_heads=8,
-        intermediate_size=512,
     ),
 }
 

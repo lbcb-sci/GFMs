@@ -1,107 +1,147 @@
+import os
+import numpy as np
 import torch 
 from torch import Tensor
-from torch.nn import functional as F
 from transformers import BertForMaskedLM, BertModel
 
 from src.common import get_models_path
+from src.instability.metrics import *
 
-def linear_cka(X: Tensor, Y: Tensor) -> float:
-    assert X.shape[0] == Y.shape[0]
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-    Xc = X - X.mean(dim=0, keepdim=True)
-    Yc = Y - Y.mean(dim=0, keepdim=True)
-
-    K = Xc @ Xc.T
-    L = Yc @ Yc.T
-
-    def hs_norm(M: Tensor): return torch.norm(M, p='fro')
-
-    hs_xy = (K * L).sum()
-    hs_xx = hs_norm(K)
-    hs_yy = hs_norm(L)
-
-    cka = hs_xy / (hs_xx * hs_yy + 1e-12)
-    return cka.item()
-
-def cosine_distances(embeddings, zscore: bool = False):
-    if zscore:
-        mean = embeddings.mean(dim=0, keepdim=True)
-        std  = embeddings.std(dim=0, unbiased=False, keepdim=True)
-        embeddings  = (embeddings - mean) / std
-
-    embeddings = F.normalize(embeddings, p=2, dim=1)
-
-    similarities = (embeddings @ embeddings.T).clamp(-1, 1)
-    distances = (1.0 - similarities)
-
-    # check that distances make sense
-    eps = 1e-5
-    diag = torch.diag(distances)
-    assert diag.allclose(torch.zeros_like(diag), rtol=eps, atol=eps)
-
-    return distances
-
-def distances_pearson(A: Tensor, B: Tensor) -> float:
-    eps = 1e-8
-    assert A.shape == B.shape
-
-    V = A.size(0)
-    iu = torch.triu_indices(V, V, offset=1) # upper triangle no diag
-
-    a = A[iu[0], iu[1]].view(-1)
-    b = B[iu[0], iu[1]].view(-1)
-
-    a = a - a.mean()
-    b = b - b.mean()
-    numerator = (a * b).sum()
-    denominator = (a.pow(2).sum().sqrt() * b.pow(2).sum().sqrt()).clamp_min(eps)
-
-    pearson = numerator / denominator
-    return pearson.item()
-
-def load_model(type: str, id: int) -> BertModel:
-    assert type in ['llm', 'glm']
-    name = f'{type}_{id}'
-    model_dir = get_models_path() / name
-    model = BertForMaskedLM.from_pretrained(str(model_dir.resolve()), local_files_only=True).eval().bert
+def load_model(path) -> BertModel:
+    model = (
+        BertForMaskedLM
+            .from_pretrained(str(path.resolve()), local_files_only=True)
+            .eval()
+            .bert
+    )
     return model
 
-def load_embeddings(type: str, id: int) -> Tensor:
-    model = load_model(type, id)
+def load_embeddings(path) -> Tensor:
+    model = load_model(path)
+    print(f'{count_parameters(model):,}M params')
     embeddings = model.embeddings.word_embeddings.weight.detach()
     return embeddings
+
+def load_many_embeddings(paths: list) -> list[Tensor]:
+    result = []
+    for path in paths:
+        emb = load_embeddings(path)
+        result.append(emb)
+    return result
+
+def mean_std(data) -> tuple[float, float]:
+    return np.mean(data), np.std(data)
+
+def linear_cka(emb1: Tensor, emb2: Tensor) -> float:
+    Xc = emb1 - emb1.mean(dim=0, keepdim=True)
+    Yc = emb2 - emb2.mean(dim=0, keepdim=True)
+    K, L = Xc @ Xc.T, Yc @ Yc.T
+    return (K * L).sum() / (torch.norm(K, p='fro') * torch.norm(L, p='fro')).item()
+
+def cka(embeddings) -> float:
+    results = []
+    for i, a in enumerate(embeddings):
+        for b in embeddings[i+1:]:
+            results.append(linear_cka(a, b))
+    return results
 
 @torch.no_grad()
 def main():
 
-    print('GLMs:')
+    models_path = get_models_path()
+    ls = os.listdir(models_path)
 
-    distance_matrices = []
+    llms = []; glms_bpe = []; glms_overlapping = []
 
-    for i in range(2):
-        embeddings = load_embeddings('glm', i)
-        distances = cosine_distances(embeddings)
-        distance_matrices.append(distances)
+    for d in ls: 
+        if   'llm' in d: llms.append(models_path / d)
+        elif 'glm' in d and 'bpe' in d: glms_bpe.append(models_path / d)
+        elif 'glm' in d and 'overlapping' in d: glms_overlapping.append(models_path / d)
+        else: pass
 
-    r = distances_pearson(*distance_matrices)
-    print(r)
+    glms_bpe_embeddings = load_many_embeddings(glms_bpe)
+    glms_ol_embeddings = load_many_embeddings(glms_overlapping)
+    llms_embeddings = load_many_embeddings(llms)
 
-    cka = linear_cka(*distance_matrices)
-    print(cka)
+    print(len(glms_bpe_embeddings))
+    print(len(glms_ol_embeddings))
+    print(len(llms_embeddings))
 
-    print('LLMs:')
+    glms_bpe_sims = [cosine_similarities(emb) for emb in glms_bpe_embeddings]
+    glms_ol_sims = [cosine_similarities(emb) for emb in glms_ol_embeddings]
+    llms_sims = [cosine_similarities(emb) for emb in llms_embeddings]
 
-    distance_matrices = []
+    glm_top3_overlap_bpe = topk_neighbor_overlap(glms_bpe_sims, k=3)
+    glm_top3_overlap_ol = topk_neighbor_overlap(glms_ol_sims, k=3)
+    llm_top3_overlap = topk_neighbor_overlap(llms_sims, k=3)
 
-    for i in range(2):
-        embeddings = load_embeddings('llm', i)
-        distances = cosine_distances(embeddings)
-        distance_matrices.append(distances)
+    glm_top3_overlap_bpe_mean, glm_top3_overlap_bpe_std = mean_std(glm_top3_overlap_bpe)
+    glm_top3_overlap_ol_mean, glm_top3_overlap_ol_std = mean_std(glm_top3_overlap_ol)
+    llm_top3_overlap_mean, llm_top3_overlap_std = mean_std(llm_top3_overlap)
 
-    r = distances_pearson(*distance_matrices)
-    print(r)
+    glm_top10_overlap_bpe = topk_neighbor_overlap(glms_bpe_sims, k=10)
+    glm_top10_overlap_ol = topk_neighbor_overlap(glms_ol_sims, k=10)
+    llm_top10_overlap = topk_neighbor_overlap(llms_sims, k=10)
 
-    cka = linear_cka(*distance_matrices)
-    print(cka)
+    glm_top10_overlap_bpe_mean, glm_top10_overlap_bpe_std = mean_std(glm_top10_overlap_bpe)
+    glm_top10_overlap_ol_mean, glm_top10_overlap_ol_std = mean_std(glm_top10_overlap_ol)
+    llm_top10_overlap_mean, llm_top10_overlap_std = mean_std(llm_top10_overlap)
+
+    glm_local_spearman_bpe = local_spearman_sim(glms_bpe_sims)
+    glm_local_spearman_ol = local_spearman_sim(glms_ol_sims)
+    llm_local_spearman = local_spearman_sim(llms_sims)
+
+    glm_local_spearman_bpe_mean, glm_local_spearman_bpe_std = mean_std(glm_local_spearman_bpe)
+    glm_local_spearman_ol_mean, glm_local_spearman_ol_std = mean_std(glm_local_spearman_ol)
+    llm_local_spearman_mean, llm_local_spearman_std = mean_std(llm_local_spearman)
+
+    relative_std_bpe = relative_diff_std(glms_bpe_sims, llms_sims)
+    relative_std_ol = relative_diff_std(glms_ol_sims, llms_sims)
+
+    print(f'GLM BPE Top-3 Overlap: {glm_top3_overlap_bpe_mean:.2f} ({glm_top3_overlap_bpe_std:.3f})')
+    print(f'GLM OL Top-3 Overlap: {glm_top3_overlap_ol_mean:.2f} ({glm_top3_overlap_ol_std:.3f})')
+    print(f'LLM Top-3 Overlap: {llm_top3_overlap_mean:.2f} ({llm_top3_overlap_std:.3f})')
+
+    print()
+
+    print(f'GLM BPE Top-10 Overlap: {glm_top10_overlap_bpe_mean:.2f} ({glm_top10_overlap_bpe_std:.3f})')
+    print(f'GLM OL Top-10 Overlap: {glm_top10_overlap_ol_mean:.2f} ({glm_top10_overlap_ol_std:.3f})')
+    print(f'LLM Top-10 Overlap: {llm_top10_overlap_mean:.2f} ({llm_top10_overlap_std:.3f})')
+
+    print()
+
+    print(f'GLM BPE Local Spearman: {glm_local_spearman_bpe_mean:.2f} ({glm_local_spearman_bpe_std:.3f})')
+    print(f'GLM OL Local Spearman: {glm_local_spearman_ol_mean:.2f} ({glm_local_spearman_ol_std:.3f})')
+    print(f'LLM Local Spearman: {llm_local_spearman_mean:.2f} ({llm_local_spearman_std:.3f})')
+
+    print()
+
+    llm_per_token_std = per_token_std(llms_sims).mean()
+    glm_per_token_std = per_token_std(glms_bpe_sims).mean()
+
+    print(f'GLM Mean std per token across models: {glm_per_token_std:.4f}')
+    print(f'LLM Mean std per token across models: {llm_per_token_std:.4f}')
+
+    print()
+
+    print(f'BPE Relative std difference: +{relative_std_bpe*100:.0f}%')
+    print(f'OL Relative std difference: +{relative_std_ol*100:.0f}%')
+
+    print()
+
+    llm_ckas = cka(llms_embeddings)
+    glm_ckas_bpe = cka(glms_bpe_embeddings)
+    glm_ckas_ol = cka(glms_ol_embeddings)
+
+    llm_cka_mean, llm_cka_std = mean_std(llm_ckas)
+    glm_cka_bpe_mean, glm_cka_bpe_std = mean_std(glm_ckas_bpe)
+    glm_cka_ol_mean, glm_cka_ol_std = mean_std(glm_ckas_ol)
+
+    print(f'GLM BPE CKA: {glm_cka_bpe_mean:.2f} ({glm_cka_bpe_std:.3f})')
+    print(f'GLM OL CKA: {glm_cka_ol_mean:.2f} ({glm_cka_ol_std:.3f})')
+    print(f'LLM CKA: {llm_cka_mean:.2f} ({llm_cka_std:.3f})')
 
 if __name__ == '__main__': main()

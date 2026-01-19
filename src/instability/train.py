@@ -1,12 +1,14 @@
 import argparse
-import numpy
 import random
+import numpy
 import torch
 import re
+
 from datasets import load_dataset
 from transformers import (
     DataCollatorForLanguageModeling,
     BertForMaskedLM,
+    AutoTokenizer,
     BertConfig, 
     Trainer, 
     set_seed,
@@ -33,11 +35,11 @@ def make_iterator(dataset):
             if text.strip(): yield text
     return iterator
 
-def train(bertconfig, tokenizer, collator, train_encoded, eval_encoded, prefix: str, **args):
+def train(bertconfig: BertConfig, tokenizer, collator, train_encoded, eval_encoded, prefix: str, **args):
     N = args['n_models']
-    models = []
-
-    path = get_models_path()
+    
+    def mkpath(seed: int):
+        return get_models_path() / f'{prefix}_{seed}_{args["tokenizer_name"]}_{bertconfig.vocab_size}_{args["train_size"]}_{args["epochs"]}_{args["max_length"]}_{bertconfig.num_hidden_layers}_{bertconfig.hidden_size}_{bertconfig.intermediate_size}'
 
     for seed in range(N):
         training_args = get_training_args(seed, **args)
@@ -61,11 +63,7 @@ def train(bertconfig, tokenizer, collator, train_encoded, eval_encoded, prefix: 
         )
 
         trainer.train()
-        trainer.save_model(output_dir=path / f'{prefix}_{seed}')
-
-        models.append(model)
-
-    return models
+        trainer.save_model(output_dir=mkpath(seed))
 
 def get_collator(tokenizer):
     return DataCollatorForLanguageModeling(
@@ -75,6 +73,7 @@ def get_collator(tokenizer):
     )
 
 def train_llms(**args):
+    assert args['tokenizer_name'] == 'bpe'
 
     train_size = args['train_size']
     eval_size  = args['eval_size']
@@ -119,7 +118,6 @@ def train_llms(**args):
     )
 
 def train_glms(**args):
-
     train_size = args['train_size']
     eval_size = args['eval_size']
 
@@ -132,8 +130,25 @@ def train_glms(**args):
 
     bertconfig: BertConfig = args['config']
 
-    tokenizer = train_bpe_tokenizer(make_iterator(dataset_train), bertconfig.vocab_size)
+    match args['tokenizer_name']:
 
+        case 'bpe':
+            tokenizer = train_bpe_tokenizer(make_iterator(dataset_train), bertconfig.vocab_size)
+        
+        case 'overlapping':
+            assert bertconfig.vocab_size == 4**6
+            tokenizer = AutoTokenizer.from_pretrained(
+                'InstaDeepAI/nucleotide-transformer-2.5b-multi-species'
+            )
+
+        case _: raise Exception('tokenizer not supported')
+
+    bertconfig.vocab_size   = tokenizer.vocab_size
+    bertconfig.pad_token_id = tokenizer.pad_token_id
+    bertconfig.bos_token_id = getattr(tokenizer, 'bos_token_id', None)
+    bertconfig.eos_token_id = getattr(tokenizer, 'eos_token_id', None)
+
+    print(tokenizer)
     print(list(tokenizer.get_vocab().keys())[:10])
 
     preprocess = lambda batch: tokenizer(
@@ -143,35 +158,50 @@ def train_glms(**args):
         max_length=args['max_length'],
     )
 
-    train_encoded = dataset_train.map(preprocess, batched=True)
-    eval_encoded  = dataset_eval.map(preprocess,  batched=True)
+    train_encoded = dataset_train.map(preprocess, batched=True, remove_columns=['text'])
+    eval_encoded  = dataset_eval.map(preprocess,  batched=True, remove_columns=['text'])
     data_collator = get_collator(tokenizer=tokenizer)
 
     return train(
-        bertconfig, tokenizer, data_collator, 
-        train_encoded, eval_encoded, 
-        'glm', **args,
+        bertconfig=bertconfig, tokenizer=tokenizer, collator=data_collator, 
+        train_encoded=train_encoded, eval_encoded=eval_encoded, 
+        prefix='glm', **args,
     )
 
 def parse_cmdline_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--type', type=str, required=True, choices=['llm', 'glm'])
     parser.add_argument('--n_models', type=int, required=False, default=5)
+    parser.add_argument('--vocab_size', type=int, required=False, default=6)
+    parser.add_argument('--tokenizer', type=str, required=False, default='bpe', choices=['overlapping', 'bpe'])
     args = parser.parse_args()
     return args
 
 def main():
     args = parse_cmdline_args(); print(args)
     train_args['n_models'] = args.n_models
+    train_args['tokenizer_name']= args.tokenizer
 
     length = train_args['max_length']
     size = train_args['train_size']
     epochs = train_args['epochs']
     print(f'training on {size*length*epochs / 1_000_000:.1f}M tokens.')
 
+    vocab_size = 4**args.vocab_size
+    train_args['config'].vocab_size = vocab_size
+
+    print(train_args)
+
     match args.type:
-        case 'llm': train_llms(**train_args)
-        case 'glm': train_glms(**train_args)
-        case     _: exit(1)
+
+        case 'llm': 
+            print('TRAINING LLMS')
+            train_llms(**train_args)
+
+        case 'glm': 
+            print('TRAINING GLMS')
+            train_glms(**train_args)
+
+        case _ : exit(1)
 
 if __name__ == '__main__': main()
