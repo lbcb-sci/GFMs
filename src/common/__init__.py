@@ -2,7 +2,7 @@ import torch
 import pathlib
 import logging
 
-from src.datasets import (
+from src.benchmarks.datasets import (
     genomic_benchmarks,
     nt_tasks,
 )

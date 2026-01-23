@@ -81,7 +81,7 @@ def train_llms(**args):
     bertconfig.bos_token_id = getattr(tokenizer, 'bos_token_id', None)
     bertconfig.eos_token_id = getattr(tokenizer, 'eos_token_id', None)
 
-    print(list(tokenizer.get_vocab().keys())[:20])
+    print('first 20 tokens of vocab:', list(tokenizer.get_vocab().keys())[:20])
 
     def preprocess(batch):
         cleaned = [clean_text(t) for t in batch["text"]]
@@ -134,7 +134,7 @@ def train_glms(**args):
     bertconfig.eos_token_id = getattr(tokenizer, 'eos_token_id', None)
 
     print(tokenizer)
-    print(list(tokenizer.get_vocab().keys())[:10])
+    print('first 20 tokens of vocab:', list(tokenizer.get_vocab().keys())[:20])
 
     preprocess = lambda batch: tokenizer(
         batch['text'], 
@@ -157,8 +157,8 @@ def parse_cmdline_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--type', type=str, required=True, choices=['llm', 'glm'])
     parser.add_argument('--n_models', type=int, required=False, default=5)
-    parser.add_argument('--vocab_size', type=int, required=False, default=6)
     parser.add_argument('--tokenizer', type=str, required=False, default='bpe', choices=['ovl', 'bpe'])
+    parser.add_argument('--vocab_size', type=int, required=False, default=6)
     args = parser.parse_args()
     return args
 

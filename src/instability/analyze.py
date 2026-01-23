@@ -26,19 +26,6 @@ def load_many_embeddings(paths: list) -> list[Tensor]:
 def mean_std(data) -> tuple[float, float]:
     return np.mean(data), np.std(data)
 
-def linear_cka(emb1: Tensor, emb2: Tensor) -> float:
-    Xc = emb1 - emb1.mean(dim=0, keepdim=True)
-    Yc = emb2 - emb2.mean(dim=0, keepdim=True)
-    K, L = Xc @ Xc.T, Yc @ Yc.T
-    return (K * L).sum() / (torch.norm(K, p='fro') * torch.norm(L, p='fro')).item()
-
-def cka(embeddings) -> float:
-    results = []
-    for i, a in enumerate(embeddings):
-        for b in embeddings[i+1:]:
-            results.append(linear_cka(a, b))
-    return results
-
 @torch.no_grad()
 def main():
 
@@ -87,9 +74,9 @@ def main():
     glm_top100_overlap_ol_mean, glm_top100_overlap_ol_std = mean_std(glm_top100_overlap_ol)
     llm_top100_overlap_mean, llm_top100_overlap_std = mean_std(llm_top100_overlap)
 
-    glm_local_spearman_bpe = local_spearman_sim(glms_bpe_sims)
-    glm_local_spearman_ol = local_spearman_sim(glms_ol_sims)
-    llm_local_spearman = local_spearman_sim(llms_sims)
+    glm_local_spearman_bpe = local_spearman(glms_bpe_sims)
+    glm_local_spearman_ol = local_spearman(glms_ol_sims)
+    llm_local_spearman = local_spearman(llms_sims)
 
     glm_local_spearman_bpe_mean, glm_local_spearman_bpe_std = mean_std(glm_local_spearman_bpe)
     glm_local_spearman_ol_mean, glm_local_spearman_ol_std = mean_std(glm_local_spearman_ol)
