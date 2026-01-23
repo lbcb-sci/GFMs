@@ -4,9 +4,9 @@ from torch import multiprocessing as mp
 from torch.utils.data import DataLoader
 
 from src.common import get_dl, get_logger, device, get_results_path
-from src.datasets import genomic_benchmarks, nt_tasks
-from src.models import linear, markov
-from src.tokenizer import KmerTokenizer
+from .models import linear, markov
+from .datasets import genomic_benchmarks, nt_tasks
+from .kmer_tokenizer import KmerTokenizer
 
 def get_args():
     parser = argparse.ArgumentParser()

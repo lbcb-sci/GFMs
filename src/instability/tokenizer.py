@@ -1,3 +1,5 @@
+import re
+
 from tokenizers import Tokenizer
 from tokenizers.models import BPE
 from tokenizers.trainers import BpeTrainer
@@ -32,3 +34,20 @@ def train_bpe_tokenizer(iterator, vocab_size: int) -> PreTrainedTokenizerFast:
     )
 
     return fast_tokenizer
+
+ALLOWED = r"[^a-zA-Z0-9\s.,;:!?\"'()\-–—/\\&%$€@#\[\]{}<>]+"
+
+def clean_text(s: str) -> str:
+    s = s.replace("\u00a0", " ")
+    s = re.sub(r"\s+", " ", s)
+    s = re.sub(ALLOWED, " ", s)
+    return s.strip()
+
+def make_iterator(dataset):
+    def iterator():
+        for example in dataset:
+            text = example["text"]
+            if not isinstance(text, str): continue
+            text = clean_text(text)
+            if text.strip(): yield text
+    return iterator

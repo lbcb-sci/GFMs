@@ -52,4 +52,10 @@ def get_dl(task: str, batch_size: int, num_workers: int, split: str = 'train'):
         num_workers=num_workers,
     )
 
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+def print_parameters(model):
+    print(f'model is {count_parameters(model)/1_000_000:,}M params')
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

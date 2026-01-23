@@ -1,17 +1,22 @@
 import torch
 from transformers import BertConfig, TrainingArguments 
 
+"""
+To calculate the number of training tokens:
+tokens = epochs * train_size * max_length  (should be roughly 1b tokens)
+"""
+
 train_args = {
     'epochs': 10, # train for that many epochs if no early stopping
     'batch_size': 128,
     'max_length': 512, # max sequence length, same for both models
-    'train_size': 200_000, # number of sequences in training set
+    'train_size': 2_000, # number of sequences in training set
     'eval_size': 5_000, # number of sequences in val set
     'config': BertConfig(
-        hidden_size=512,
-        intermediate_size=1024,
-        num_hidden_layers=8,
-        num_attention_heads=8,
+        #hidden_size=512,
+        #intermediate_size=1024,
+        #num_hidden_layers=8,
+        #num_attention_heads=8,
     ),
 }
 

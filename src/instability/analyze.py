@@ -1,27 +1,18 @@
 import os
-import numpy as np
 import torch 
+import numpy as np
 from torch import Tensor
 from transformers import BertForMaskedLM, BertModel
 
-from src.common import get_models_path
+from src.common import get_models_path, print_parameters
 from src.instability.metrics import *
 
-def count_parameters(model):
-    return sum(p.numel() for p in model.parameters() if p.requires_grad)
-
 def load_model(path) -> BertModel:
-    model = (
-        BertForMaskedLM
-            .from_pretrained(str(path.resolve()), local_files_only=True)
-            .eval()
-            .bert
-    )
-    return model
+    return BertForMaskedLM.from_pretrained(str(path.resolve()), local_files_only=True).eval().bert
 
 def load_embeddings(path) -> Tensor:
     model = load_model(path)
-    print(f'{count_parameters(model):,}M params')
+    print_parameters(model)
     embeddings = model.embeddings.word_embeddings.weight.detach()
     return embeddings
 
@@ -66,9 +57,7 @@ def main():
     glms_ol_embeddings = load_many_embeddings(glms_overlapping)
     llms_embeddings = load_many_embeddings(llms)
 
-    print(len(glms_bpe_embeddings))
-    print(len(glms_ol_embeddings))
-    print(len(llms_embeddings))
+    print(len(glms_bpe_embeddings), len(glms_ol_embeddings), len(llms_embeddings))
 
     glms_bpe_sims = [cosine_similarities(emb) for emb in glms_bpe_embeddings]
     glms_ol_sims = [cosine_similarities(emb) for emb in glms_ol_embeddings]
@@ -90,6 +79,14 @@ def main():
     glm_top10_overlap_ol_mean, glm_top10_overlap_ol_std = mean_std(glm_top10_overlap_ol)
     llm_top10_overlap_mean, llm_top10_overlap_std = mean_std(llm_top10_overlap)
 
+    glm_top100_overlap_bpe = topk_neighbor_overlap(glms_bpe_sims, k=100)
+    glm_top100_overlap_ol = topk_neighbor_overlap(glms_ol_sims, k=100)
+    llm_top100_overlap = topk_neighbor_overlap(llms_sims, k=100)
+
+    glm_top100_overlap_bpe_mean, glm_top100_overlap_bpe_std = mean_std(glm_top100_overlap_bpe)
+    glm_top100_overlap_ol_mean, glm_top100_overlap_ol_std = mean_std(glm_top100_overlap_ol)
+    llm_top100_overlap_mean, llm_top100_overlap_std = mean_std(llm_top100_overlap)
+
     glm_local_spearman_bpe = local_spearman_sim(glms_bpe_sims)
     glm_local_spearman_ol = local_spearman_sim(glms_ol_sims)
     llm_local_spearman = local_spearman_sim(llms_sims)
@@ -110,6 +107,12 @@ def main():
     print(f'GLM BPE Top-10 Overlap: {glm_top10_overlap_bpe_mean:.2f} ({glm_top10_overlap_bpe_std:.3f})')
     print(f'GLM OL Top-10 Overlap: {glm_top10_overlap_ol_mean:.2f} ({glm_top10_overlap_ol_std:.3f})')
     print(f'LLM Top-10 Overlap: {llm_top10_overlap_mean:.2f} ({llm_top10_overlap_std:.3f})')
+
+    print()
+
+    print(f'GLM BPE Top-100 Overlap: {glm_top100_overlap_bpe_mean:.2f} ({glm_top100_overlap_bpe_std:.3f})')
+    print(f'GLM OL Top-100 Overlap: {glm_top100_overlap_ol_mean:.2f} ({glm_top100_overlap_ol_std:.3f})')
+    print(f'LLM Top-100 Overlap: {llm_top100_overlap_mean:.2f} ({llm_top100_overlap_std:.3f})')
 
     print()
 

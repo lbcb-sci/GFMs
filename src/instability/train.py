@@ -2,7 +2,6 @@ import argparse
 import random
 import numpy
 import torch
-import re
 
 from datasets import load_dataset
 from transformers import (
@@ -14,32 +13,23 @@ from transformers import (
     set_seed,
 )
 
-from src.instability.tokenizer import train_bpe_tokenizer
 from src.instability.config import train_args, get_training_args
-from src.common import get_models_path
-
-ALLOWED = r"[^a-zA-Z0-9\s.,;:!?\"'()\-–—/\\&%$€@#\[\]{}<>]+"
-
-def clean_text(s: str) -> str:
-    s = s.replace("\u00a0", " ")
-    s = re.sub(r"\s+", " ", s)
-    s = re.sub(ALLOWED, " ", s)
-    return s.strip()
-
-def make_iterator(dataset):
-    def iterator():
-        for example in dataset:
-            text = example["text"]
-            if not isinstance(text, str): continue
-            text = clean_text(text)
-            if text.strip(): yield text
-    return iterator
+from src.instability.tokenizer import train_bpe_tokenizer, make_iterator, clean_text
+from src.common import get_models_path, print_parameters
 
 def train(bertconfig: BertConfig, tokenizer, collator, train_encoded, eval_encoded, prefix: str, **args):
     N = args['n_models']
     
     def mkpath(seed: int):
-        return get_models_path() / f'{prefix}_{seed}_{args["tokenizer_name"]}_{bertconfig.vocab_size}_{args["train_size"]}_{args["epochs"]}_{args["max_length"]}_{bertconfig.num_hidden_layers}_{bertconfig.hidden_size}_{bertconfig.intermediate_size}'
+        tok       = args["tokenizer_name"]
+        vsize     = bertconfig.vocab_size
+        trainsize = args["train_size"]
+        epochs    = args["epochs"]
+        maxlen    = args["max_length"]
+        nhidden   = bertconfig.num_hidden_layers
+        hsize     = bertconfig.hidden_size
+        intsize   = bertconfig.intermediate_size
+        return get_models_path() / f'{prefix}_{seed}_{tok}_{vsize}_{trainsize}_{epochs}_{maxlen}_{nhidden}_{hsize}_{intsize}'
 
     for seed in range(N):
         training_args = get_training_args(seed, **args)
@@ -52,6 +42,7 @@ def train(bertconfig: BertConfig, tokenizer, collator, train_encoded, eval_encod
         torch.cuda.manual_seed_all(seed)
 
         model = BertForMaskedLM(bertconfig)
+        print_parameters(model)
 
         trainer = Trainer(
             model=model,
@@ -66,11 +57,7 @@ def train(bertconfig: BertConfig, tokenizer, collator, train_encoded, eval_encod
         trainer.save_model(output_dir=mkpath(seed))
 
 def get_collator(tokenizer):
-    return DataCollatorForLanguageModeling(
-        tokenizer=tokenizer,
-        mlm=True,
-        mlm_probability=0.15,
-    )
+    return DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=True, mlm_probability=0.15)
 
 def train_llms(**args):
     assert args['tokenizer_name'] == 'bpe'
@@ -119,12 +106,12 @@ def train_llms(**args):
 
 def train_glms(**args):
     train_size = args['train_size']
-    eval_size = args['eval_size']
+    eval_size  = args['eval_size']
 
     trainset = f'train[:{train_size}]'
-    evalset = f'train[{train_size}:{train_size + eval_size}]'
+    evalset  = f'train[{train_size}:{train_size + eval_size}]'
 
-    dataset_name = 'zhangtaolab/plant-reference-genomes'
+    dataset_name  = 'zhangtaolab/plant-reference-genomes'
     dataset_train = load_dataset(dataset_name, split=trainset)
     dataset_eval  = load_dataset(dataset_name, split=evalset)
 
@@ -135,11 +122,9 @@ def train_glms(**args):
         case 'bpe':
             tokenizer = train_bpe_tokenizer(make_iterator(dataset_train), bertconfig.vocab_size)
         
-        case 'overlapping':
+        case 'ovl':
             assert bertconfig.vocab_size == 4**6
-            tokenizer = AutoTokenizer.from_pretrained(
-                'InstaDeepAI/nucleotide-transformer-2.5b-multi-species'
-            )
+            tokenizer = AutoTokenizer.from_pretrained('InstaDeepAI/nucleotide-transformer-2.5b-multi-species')
 
         case _: raise Exception('tokenizer not supported')
 
@@ -173,7 +158,7 @@ def parse_cmdline_args():
     parser.add_argument('--type', type=str, required=True, choices=['llm', 'glm'])
     parser.add_argument('--n_models', type=int, required=False, default=5)
     parser.add_argument('--vocab_size', type=int, required=False, default=6)
-    parser.add_argument('--tokenizer', type=str, required=False, default='bpe', choices=['overlapping', 'bpe'])
+    parser.add_argument('--tokenizer', type=str, required=False, default='bpe', choices=['ovl', 'bpe'])
     args = parser.parse_args()
     return args
 
