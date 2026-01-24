@@ -1,66 +1,77 @@
-import argparse
-import random
 import numpy
 import torch
-
+import random
+import argparse
 from datasets import load_dataset
 from transformers import (
     DataCollatorForLanguageModeling,
-    BertForMaskedLM,
-    AutoTokenizer,
-    BertConfig, 
-    Trainer, 
-    set_seed,
+    BertForMaskedLM, AutoTokenizer,
+    BertConfig, Trainer, set_seed,
 )
 
-from src.instability.config import train_args, get_training_args
-from src.instability.tokenizer import train_bpe_tokenizer, make_iterator, clean_text
-from src.common import get_models_path, print_parameters
+from src.tokenizer import train_bpe_tokenizer, make_iterator, clean_text
+from src.utils import get_config_4M, get_config_20M, get_config_90M
+from src.utils import (
+    get_training_args, count_parameters,
+    make_run_path, get_logger,
+)
 
-def train(bertconfig: BertConfig, tokenizer, collator, train_encoded, eval_encoded, prefix: str, **args):
-    N = args['n_models']
-    
-    def mkpath(seed: int):
-        tok       = args["tokenizer_name"]
-        vsize     = bertconfig.vocab_size
-        trainsize = args["train_size"]
-        epochs    = args["epochs"]
-        maxlen    = args["max_length"]
-        nhidden   = bertconfig.num_hidden_layers
-        hsize     = bertconfig.hidden_size
-        intsize   = bertconfig.intermediate_size
-        return get_models_path() / f'{prefix}_{seed}_{tok}_{vsize}_{trainsize}_{epochs}_{maxlen}_{nhidden}_{hsize}_{intsize}'
+def train(
+        bertconfig: BertConfig, 
+        tokenizer, collator, 
+        train_dataset, eval_dataset, 
+        prefix: str, **args,
+    ):
 
-    for seed in range(N):
+    logger = args['logger']
+    N = args['N']
+
+    save_path = make_run_path(prefix, args['tokenizer_name'])
+
+    for seed in range(1, N+1):
         training_args = get_training_args(seed, **args)
 
         # making sure model gets different initialization every time!
-        set_seed(seed)
-        random.seed(seed)
-        numpy.random.seed(seed)
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
+        set_seed(seed); random.seed(seed); numpy.random.seed(seed)
+        torch.manual_seed(seed); torch.cuda.manual_seed_all(seed)
 
         model = BertForMaskedLM(bertconfig)
-        print_parameters(model)
+        nparams = count_parameters(model)
+        logger.info(f' model has {nparams:,} parameters')
+        args['n_params'] = nparams
 
         trainer = Trainer(
             model=model,
             args=training_args,
             tokenizer=tokenizer,
             data_collator=collator,
-            eval_dataset=eval_encoded,
-            train_dataset=train_encoded,
+            eval_dataset=eval_dataset,
+            train_dataset=train_dataset,
         )
 
+        logger.info(f' starting the training of model #{seed}...')
         trainer.train()
-        trainer.save_model(output_dir=mkpath(seed))
+
+        logger.info(f' model #{seed} trained')
+
+        output = save_path / str(seed)
+        trainer.save_model(output_dir=output)
+        with open(output / 'configuration.txt', 'w') as c: c.write(str(args))
+        logger.info(f' saved model at {output}')
 
 def get_collator(tokenizer):
+    '''define the MLM config here if needed'''
     return DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=True, mlm_probability=0.15)
 
-def train_llms(**args):
-    assert args['tokenizer_name'] == 'bpe'
+def train_text(**args):
+    logger = args['logger']
+
+    if args['tokenizer_name'] != 'bpe': 
+        logger.fatal('for text only bpe tokenizer is supported')
+        exit(1)
+
+    dataset_name = 'wikimedia/wikipedia'
+    logger.info(f' collecting dataset {dataset_name}...')
 
     train_size = args['train_size']
     eval_size  = args['eval_size']
@@ -68,20 +79,25 @@ def train_llms(**args):
     trainset = f'train[:{train_size}]'
     evalset  = f'train[{train_size}:{train_size + eval_size}]'
 
-    dataset_name = 'wikimedia/wikipedia'
     dataset_train = load_dataset(dataset_name, '20231101.en', split=trainset)
     dataset_eval  = load_dataset(dataset_name, '20231101.en', split=evalset)
 
-    bertconfig: BertConfig = args['config']
+    logger.info(' collecting dataset done.')
 
-    tokenizer = train_bpe_tokenizer(make_iterator(dataset_train), bertconfig.vocab_size)
+    bertconfig = args['bertconfig']
 
+    logger.info(' training bpe tokenizer...')
+
+    vocab_size = 4**args['kmer']
+
+    tokenizer = train_bpe_tokenizer(make_iterator(dataset_train), vocab_size=vocab_size)
     bertconfig.vocab_size   = tokenizer.vocab_size
     bertconfig.pad_token_id = tokenizer.pad_token_id
     bertconfig.bos_token_id = getattr(tokenizer, 'bos_token_id', None)
     bertconfig.eos_token_id = getattr(tokenizer, 'eos_token_id', None)
 
-    print('first 20 tokens of vocab:', list(tokenizer.get_vocab().keys())[:20])
+    logger.info(' training bpe tokenizer done.')
+    logger.info(f' first 20 tokens: {list(tokenizer.get_vocab().keys())[:20]}')
 
     def preprocess(batch):
         cleaned = [clean_text(t) for t in batch["text"]]
@@ -92,49 +108,72 @@ def train_llms(**args):
             max_length=args["max_length"],
         )
 
+    logger.info(' preprocessing dataset with tokenizer...')
+
     remove = ['text', 'url', 'id', 'title']
 
     train_encoded = dataset_train.map(preprocess, batched=True, remove_columns=remove)
     eval_encoded  = dataset_eval.map(preprocess,  batched=True, remove_columns=remove)
     data_collator = get_collator(tokenizer=tokenizer)
 
+    logger.info(' preprocessing dataset with tokenizer done.')
+
+    logger.info(' calling train function')
+
+    args.pop('bertconfig')
+
     return train(
         bertconfig, tokenizer, data_collator, 
         train_encoded, eval_encoded, 
-        'llm', **args,
+        'text', **args,
     )
 
-def train_glms(**args):
+def train_dna(**args):
+    logger = args['logger']
+
+    dataset_name  = 'zhangtaolab/plant-reference-genomes'
+    logger.info(f' collecting dataset {dataset_name}...')
+
     train_size = args['train_size']
     eval_size  = args['eval_size']
 
     trainset = f'train[:{train_size}]'
     evalset  = f'train[{train_size}:{train_size + eval_size}]'
 
-    dataset_name  = 'zhangtaolab/plant-reference-genomes'
     dataset_train = load_dataset(dataset_name, split=trainset)
     dataset_eval  = load_dataset(dataset_name, split=evalset)
 
-    bertconfig: BertConfig = args['config']
+    logger.info(' collecting dataset done.')
+
+    bertconfig = args['bertconfig']
 
     match args['tokenizer_name']:
 
         case 'bpe':
-            tokenizer = train_bpe_tokenizer(make_iterator(dataset_train), bertconfig.vocab_size)
+            logger.info(' training bpe tokenizer...')
+            vocab_size = 4**args['kmer']
+            tokenizer = train_bpe_tokenizer(make_iterator(dataset_train), vocab_size=vocab_size)
+            logger.info(' training bpe tokenizer done.')
         
         case 'ovl':
-            assert bertconfig.vocab_size == 4**6
-            tokenizer = AutoTokenizer.from_pretrained('InstaDeepAI/nucleotide-transformer-2.5b-multi-species')
+            if args['kmer'] != 6: 
+                logger.fatal('training on dna with ovl tokenizer is only implemented for 6-mers')
+                exit(1)
 
-        case _: raise Exception('tokenizer not supported')
+            logger.info(f' loading overlapping {args["kmer"]}-mer tokenizer...')
+            tokenizer = AutoTokenizer.from_pretrained('InstaDeepAI/nucleotide-transformer-2.5b-multi-species')
+            logger.info(f' loading tokenizer done.')
+
+        case _: 
+            logger.fatal('tokenizer not supported')
+            exit(1)
 
     bertconfig.vocab_size   = tokenizer.vocab_size
     bertconfig.pad_token_id = tokenizer.pad_token_id
     bertconfig.bos_token_id = getattr(tokenizer, 'bos_token_id', None)
     bertconfig.eos_token_id = getattr(tokenizer, 'eos_token_id', None)
 
-    print(tokenizer)
-    print('first 20 tokens of vocab:', list(tokenizer.get_vocab().keys())[:20])
+    logger.info(f' first 20 tokens: {list(tokenizer.get_vocab().keys())[:20]}')
 
     preprocess = lambda batch: tokenizer(
         batch['text'], 
@@ -143,50 +182,50 @@ def train_glms(**args):
         max_length=args['max_length'],
     )
 
+    logger.info(' preprocessing dataset with tokenizer...')
+
     train_encoded = dataset_train.map(preprocess, batched=True, remove_columns=['text'])
     eval_encoded  = dataset_eval.map(preprocess,  batched=True, remove_columns=['text'])
     data_collator = get_collator(tokenizer=tokenizer)
 
+    logger.info(' preprocessing dataset with tokenizer done.')
+
+    logger.info(' calling train function')
+
+    args.pop('bertconfig')
+
     return train(
         bertconfig=bertconfig, tokenizer=tokenizer, collator=data_collator, 
-        train_encoded=train_encoded, eval_encoded=eval_encoded, 
-        prefix='glm', **args,
+        train_dataset=train_encoded, eval_dataset=eval_encoded, 
+        prefix='dna', **args,
     )
 
 def parse_cmdline_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--type', type=str, required=True, choices=['llm', 'glm'])
-    parser.add_argument('--n_models', type=int, required=False, default=5)
-    parser.add_argument('--tokenizer', type=str, required=False, default='bpe', choices=['ovl', 'bpe'])
-    parser.add_argument('--vocab_size', type=int, required=False, default=6)
+    parser = argparse.ArgumentParser(description='Train N BERT models on either text or dna.')
+    parser.add_argument('--type', type=str, required=True, choices=['text', 'dna'], help='whether to train on text or dna')
+    parser.add_argument('--tokenizer', type=str, required=False, default='bpe', choices=['ovl', 'bpe'], help='which tokenizer to use, bpe or overlapping kmer')
     args = parser.parse_args()
     return args
 
 def main():
-    args = parse_cmdline_args(); print(args)
-    train_args['n_models'] = args.n_models
-    train_args['tokenizer_name']= args.tokenizer
+    args = get_config_4M()
 
-    length = train_args['max_length']
-    size = train_args['train_size']
-    epochs = train_args['epochs']
-    print(f'training on {size*length*epochs / 1_000_000:.1f}M tokens.')
+    cmdargs = parse_cmdline_args()
+    args['tokenizer_name'] = cmdargs.tokenizer
 
-    vocab_size = 4**args.vocab_size
-    train_args['config'].vocab_size = vocab_size
+    logger = get_logger('train')
+    args['logger'] = logger
 
-    print(train_args)
+    for k, v in args.items(): logger.info(f' {k}={v}')
 
-    match args.type:
-
-        case 'llm': 
-            print('TRAINING LLMS')
-            train_llms(**train_args)
-
-        case 'glm': 
-            print('TRAINING GLMS')
-            train_glms(**train_args)
-
+    # dispatch to correct data modality
+    match cmdargs.type:
+        case 'text': 
+            logger.info(' training on text')
+            train_text(**args)
+        case 'dna': 
+            logger.info(' training on dna')
+            train_dna(**args)
         case _ : exit(1)
 
 if __name__ == '__main__': main()

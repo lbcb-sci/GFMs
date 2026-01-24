@@ -1,9 +1,7 @@
+import numpy as np
 import torch
 from torch import Tensor
 from torch.nn import functional as F
-
-import numpy as np
-
 from sklearn.cross_decomposition import CCA
 from sklearn.preprocessing import StandardScaler
 
