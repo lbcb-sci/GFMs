@@ -2,6 +2,11 @@ import torch
 from torch import Tensor
 from torch.nn import functional as F
 
+import numpy as np
+
+from sklearn.cross_decomposition import CCA
+from sklearn.preprocessing import StandardScaler
+
 eps = 1e-8
 
 def cosine_similarities(embeddings: Tensor) -> Tensor:
@@ -87,6 +92,26 @@ def linear_cka(emb1: Tensor, emb2: Tensor) -> float:
     K, L = Xc @ Xc.T, Yc @ Yc.T
     return (K * L).sum() / (torch.norm(K, p='fro') * torch.norm(L, p='fro')).item()
 
+def compute_cca_corrs(X, Y, n_components=None):
+    # Standardize
+    X_std = StandardScaler().fit_transform(X)
+    Y_std = StandardScaler().fit_transform(Y)
+
+    if n_components is None:
+        n_components = min(X_std.shape[1], Y_std.shape[1])
+
+    cca = CCA(n_components=n_components)
+    X_c, Y_c = cca.fit_transform(X_std, Y_std)
+
+    corrs = []
+    for k in range(n_components):
+        xk = X_c[:, k]
+        yk = Y_c[:, k]
+        corr = np.corrcoef(xk, yk)[0, 1]
+        corrs.append(corr)
+
+    return np.array(corrs)
+
 def compute_pairwise(metric, data):
     results = []
     for i, a in enumerate(data):
@@ -95,3 +120,6 @@ def compute_pairwise(metric, data):
 
 def cka(embeddings) -> list[float]:
     return compute_pairwise(linear_cka, embeddings)
+
+def cca(embeddings):
+    return compute_pairwise(compute_cca_corrs, embeddings)

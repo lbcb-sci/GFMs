@@ -13,18 +13,12 @@ def load_model(path) -> BertModel:
 def load_embeddings(path) -> Tensor:
     model = load_model(path)
     print_parameters(model)
-    embeddings = model.embeddings.word_embeddings.weight.detach()
-    return embeddings
+    return model.embeddings.word_embeddings.weight.detach()
 
 def load_many_embeddings(paths: list) -> list[Tensor]:
-    result = []
-    for path in paths:
-        emb = load_embeddings(path)
-        result.append(emb)
-    return result
+    return [load_embeddings(path) for path in paths]
 
-def mean_std(data) -> tuple[float, float]:
-    return np.mean(data), np.std(data)
+def mean_std(data) -> tuple[float, float]: return np.mean(data), np.std(data)
 
 @torch.no_grad()
 def main():
@@ -35,7 +29,7 @@ def main():
     llms = []; glms_bpe = []; glms_overlapping = []
 
     for d in ls: 
-        if   'llm' in d: llms.append(models_path / d)
+        if   'llm' in d and '512' in d: llms.append(models_path / d)
         elif 'glm' in d and 'bpe' in d: glms_bpe.append(models_path / d)
         elif 'glm' in d and 'overlapping' in d: glms_overlapping.append(models_path / d)
         else: pass
