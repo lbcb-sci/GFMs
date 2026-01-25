@@ -32,8 +32,8 @@ Models are saved in `runs/<timestamp>_<type>_<tokenizer>/<id>` so that they can 
 
 For example, if you run `uv run -m src.train --type dna --tokenizer ovl`, it will create:
 ```bash
-runs/<timestamp>_dna_ovl/0
 runs/<timestamp>_dna_ovl/1
+runs/<timestamp>_dna_ovl/2
 ...
 runs/<timestamp>_dna_ovl/N
 ```
