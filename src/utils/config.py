@@ -32,7 +32,6 @@ base = {
     'max_length': 512,
     'eval_size': 5_000,
     'train_size': 200_000,
-
     # 10 * 512 * 200'000 = 1.024b tokens
 }
 
@@ -46,7 +45,7 @@ _test = { # very small config for testing
     'train_size': 200,
 }
 
-#base = _test; print('using dummy test config!') # uncomment for testing that everything works properly
+base = _test; print('USING DUMMY TEST CONFIG') # uncomment for testing that everything works properly
 
 # the 3 functions below only change the size of the BERT model used.
 

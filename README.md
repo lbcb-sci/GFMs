@@ -1,17 +1,50 @@
 # GFMs
 
-Analysis of Genomic Foundation Models (mostly their embeddings).
+Analysis of Genomic Foundation Models. This repository aims to implement a series of experiments to critically evaluate the field of "foundation" models for genomics. 
 
-This repository aims to implement a series of experiments to critically evaluate the field of "Genomic Foundation Models". 
+[This short essay](essay.pdf) explains my view on GFMs.
 
-[This short essay](essay.pdf) explains my current view on the subject.
+## Setup
 
 This project was built with `uv`, you can also run it as usual by installing the dependencies in `requirements.txt`.
 
-After installing `uv` you should be able to directly run the commands below (from root), it will get the required dependencies automatically.
+You can install `uv` here: https://docs.astral.sh/uv/getting-started/installation/
 
-The configuration can be set in `src/utils/config.py` it defaults to the default BERT config (~90M params). 
+After installing `uv`, you can directly run the commands below, it will install the dependencies automatically from the `uv.lock` file.
 
-### Usage
+## Usage
+
+There are two main scripts in `src`, `train.py` and `analyze.py`. They should be called as modules (with `-m`).
+
+### Configuration
+
+The configuration of the models can be set in `src/utils/config.py` it defaults to the default HuggingFace BERT config (rougly ~90M params). 
+
+### Training
+
+First you need to train the models:
+```bash
+uv run -m src.train --type {text, dna} --tokenizer {bpe, ovl} 
+# all other hyperparams can be set in the utils/config.py file
+```
+
+Models are saved in `runs/<timestamp>_<type>_<tokenizer>/<id>` so that they can be retrieved later for analysis.
+
+For example, if you run `uv run -m src.train --type dna --tokenizer ovl`, it will create:
+```bash
+runs/<timestamp>_dna_ovl/0
+runs/<timestamp>_dna_ovl/1
+...
+runs/<timestamp>_dna_ovl/N
+```
+for $N$ specified in the config files ($N=5$ by default).
+
+### Analysis
+
+#### Static (word embedings)
+
+TODO
+
+#### Dynamic
 
 TODO

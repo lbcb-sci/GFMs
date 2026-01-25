@@ -157,7 +157,7 @@ def train_dna(**args):
         
         case 'ovl':
             if args['kmer'] != 6: 
-                logger.fatal('training on dna with ovl tokenizer is only implemented for 6-mers')
+                logger.fatal(' training on dna with ovl tokenizer is only implemented for 6-mers')
                 exit(1)
 
             logger.info(f' loading overlapping {args["kmer"]}-mer tokenizer...')
@@ -165,7 +165,7 @@ def train_dna(**args):
             logger.info(f' loading tokenizer done.')
 
         case _: 
-            logger.fatal('tokenizer not supported')
+            logger.fatal(' tokenizer not supported')
             exit(1)
 
     bertconfig.vocab_size   = tokenizer.vocab_size
@@ -203,7 +203,7 @@ def train_dna(**args):
 def parse_cmdline_args():
     parser = argparse.ArgumentParser(description='Train N BERT models on either text or dna.')
     parser.add_argument('--type', type=str, required=True, choices=['text', 'dna'], help='whether to train on text or dna')
-    parser.add_argument('--tokenizer', type=str, required=False, default='bpe', choices=['ovl', 'bpe'], help='which tokenizer to use, bpe or overlapping kmer')
+    parser.add_argument('--tokenizer', type=str, required=True, choices=['ovl', 'bpe'], help='which tokenizer to use, bpe or overlapping k-mer')
     args = parser.parse_args()
     return args
 
@@ -218,14 +218,18 @@ def main():
 
     for k, v in args.items(): logger.info(f' {k}={v}')
 
-    # dispatch to correct data modality
-    match cmdargs.type:
+    match cmdargs.type: # dispatch to correct data modality
+
         case 'text': 
             logger.info(' training on text')
             train_text(**args)
+
         case 'dna': 
             logger.info(' training on dna')
             train_dna(**args)
-        case _ : exit(1)
+
+        case _ : 
+            logger.fatal(' data modality not supported')
+            exit(1)
 
 if __name__ == '__main__': main()
