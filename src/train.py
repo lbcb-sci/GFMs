@@ -209,7 +209,7 @@ def parse_cmdline_args():
     return args
 
 def main():
-    args = get_config_4M()
+    args = get_config_90M()
 
     cmdargs = parse_cmdline_args()
     args['tokenizer_name'] = cmdargs.tokenizer
@@ -242,3 +242,4 @@ def main():
             exit(1)
 
 if __name__ == '__main__': main()
+

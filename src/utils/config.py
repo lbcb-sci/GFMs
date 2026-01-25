@@ -25,10 +25,10 @@ def get_training_args(seed: int, **args):
 # base configuration for training on 1b tokens
 base = {
     'N': 5,    # number of models to train
-    'kmer': 6, # vocab size = 4**kmer
+    'kmer': 6, # vocab size = 4**kmer + special tokens
 
     'epochs': 10,
-    'batch_size': 256,
+    'batch_size': 128,
     'max_length': 512,
     'eval_size': 5_000,
     'train_size': 200_000,
@@ -45,7 +45,7 @@ _test = { # very small config for testing
     'train_size': 200,
 }
 
-base = _test; print('USING DUMMY TEST CONFIG') # uncomment for testing that everything works properly
+# base = _test; print('USING DUMMY TEST CONFIG') # uncomment for testing that everything works properly
 
 # the 3 functions below only change the size of the BERT model used.
 
