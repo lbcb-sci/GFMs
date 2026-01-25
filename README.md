@@ -24,13 +24,13 @@ The configuration of the models can be set in `src/utils/config.py` it defaults 
 
 First you need to train the models:
 ```bash
-uv run -m src.train --type {text, dna} --tokenizer {bpe, ovl} 
+uv run -m src.train --type {text, dna} --tokenizer {bpe, ovl} --gpu <GPU_ID> 
 # all other hyperparams can be set in the utils/config.py file
 ```
 
 Models are saved in `runs/<timestamp>_<type>_<tokenizer>/<id>` so that they can be retrieved later for analysis.
 
-For example, if you run `uv run -m src.train --type dna --tokenizer ovl`, it will create:
+For example, if you run `uv run -m src.train --type dna --tokenizer ovl --gpu 0`, it will create:
 ```bash
 runs/<timestamp>_dna_ovl/1
 runs/<timestamp>_dna_ovl/2
