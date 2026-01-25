@@ -4,24 +4,26 @@ import random
 import argparse
 from datasets import load_dataset
 from transformers import (
-    DataCollatorForLanguageModeling,
-    BertForMaskedLM, AutoTokenizer,
-    BertConfig, Trainer, set_seed,
+    DataCollatorForLanguageModeling, PreTrainedTokenizer,
+    BertForMaskedLM, AutoTokenizer, BertConfig, Trainer, set_seed,
 )
 
 from src.tokenizer import train_bpe_tokenizer, make_iterator, clean_text
 from src.utils import get_config_4M, get_config_20M, get_config_90M
-from src.utils import (
-    get_training_args, count_parameters,
-    make_run_path, get_logger,
-)
+from src.utils import get_training_args, count_parameters, make_run_path, get_logger
+
+def get_collator(tokenizer):
+    '''define the MLM config here if needed'''
+    return DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=True, mlm_probability=0.15)
 
 def train(
         bertconfig: BertConfig, 
-        tokenizer, collator, 
+        tokenizer: PreTrainedTokenizer, 
+        collator: DataCollatorForLanguageModeling, 
         train_dataset, eval_dataset, 
         prefix: str, **args,
     ):
+    '''Core train function.'''
 
     logger = args['logger']
     N = args['N']
@@ -35,10 +37,12 @@ def train(
         set_seed(seed); random.seed(seed); numpy.random.seed(seed)
         torch.manual_seed(seed); torch.cuda.manual_seed_all(seed)
 
-        model = BertForMaskedLM(bertconfig)
+        model = BertForMaskedLM(bertconfig).to(args['device'])
+        logger.info(f' model device: {next(model.parameters()).device}')
+
         nparams = count_parameters(model)
-        logger.info(f' model has {nparams:,} parameters')
         args['n_params'] = nparams
+        logger.info(f' model has {nparams:,} parameters')
 
         trainer = Trainer(
             model=model,
@@ -58,10 +62,6 @@ def train(
         trainer.save_model(output_dir=output)
         with open(output / 'configuration.txt', 'w') as c: c.write(str(args))
         logger.info(f' saved model at {output}')
-
-def get_collator(tokenizer):
-    '''define the MLM config here if needed'''
-    return DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=True, mlm_probability=0.15)
 
 def train_text(**args):
     logger = args['logger']
@@ -204,6 +204,7 @@ def parse_cmdline_args():
     parser = argparse.ArgumentParser(description='Train N BERT models on either text or dna.')
     parser.add_argument('--type', type=str, required=True, choices=['text', 'dna'], help='whether to train on text or dna')
     parser.add_argument('--tokenizer', type=str, required=True, choices=['ovl', 'bpe'], help='which tokenizer to use, bpe or overlapping k-mer')
+    parser.add_argument('--gpu', type=int, required=True, help='which gpu id to use for training')
     args = parser.parse_args()
     return args
 
@@ -215,6 +216,14 @@ def main():
 
     logger = get_logger('train')
     args['logger'] = logger
+
+    gpu = cmdargs.gpu
+    device = f'cuda:{gpu}'
+    args['device'] = device
+    torch.cuda.set_device(gpu)
+
+    logger.info(f' available gpus: {torch.cuda.device_count()}')
+    logger.info(f' current cuda device: {torch.cuda.current_device()}')
 
     for k, v in args.items(): logger.info(f' {k}={v}')
 

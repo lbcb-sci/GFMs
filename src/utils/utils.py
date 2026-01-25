@@ -1,10 +1,7 @@
 import time
 import pathlib
 import logging
-
-import torch
 from torch import Tensor
-
 from transformers import BertModel, BertForMaskedLM
 
 def get_logger(name: str):
@@ -31,8 +28,6 @@ def get_plots_path() -> pathlib.Path:
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def load_model(path) -> BertModel:
     return BertForMaskedLM.from_pretrained(str(path.resolve()), local_files_only=True).eval().bert
