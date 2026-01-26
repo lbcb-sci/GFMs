@@ -6,6 +6,7 @@ from transformers import BertForMaskedLM
 
 from src.utils import get_logger, count_parameters
 from .static import static_analysis
+from .dynamic import dynamic_analysis
 
 def load_models(args) -> dict:
     logger = args.logger
@@ -36,6 +37,8 @@ def parse_args():
 @torch.no_grad()
 @torch.autograd.inference_mode()
 def main() -> None:
+    import pprint 
+
     args = parse_args()
 
     logger = get_logger('<analyze>')
@@ -43,8 +46,12 @@ def main() -> None:
     args.logger = logger
 
     models = load_models(args)
+    models = {str(k).replace('runs/', ''): v for k, v in models.items()}
 
-    logger.info(' running static analysis of word embeddings')
-    static_analysis(models)
+    logger.info(' running static analysis...')
+    static_result = static_analysis(models)
+    logger.info(f' results: {pprint.pformat(static_result)}')
+
+    #logger.info(' running dynamic analysis...')
 
 if __name__ == '__main__': main()

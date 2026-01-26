@@ -21,11 +21,14 @@ def meanstd(values: Iterable) -> tuple[float, float]:
 
 def cka(embeddings): return meanstd(pairwise_metric(embeddings, metric=cka_base))
 
-def static_analysis(models: dict) -> None:
-    embeddings1 = extract_word_embeddings(list(models.values())[0])
-    embeddings2 = extract_word_embeddings(list(models.values())[1])
-    embeddings3 = extract_word_embeddings(list(models.values())[2])
+def static_analysis(models_dict: dict) -> None:
+    data = {run: {} for run in models_dict.keys()}
 
-    print(cka(embeddings1))
-    print(cka(embeddings2))
-    print(cka(embeddings3))
+    for run, models in models_dict.items():
+        embeddings = extract_word_embeddings(models)
+
+        # CKA
+        cka_result = cka(embeddings)
+        data[run]['cka'] = cka_result
+
+    return data
