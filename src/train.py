@@ -201,8 +201,7 @@ def parse_cmdline_args():
     parser.add_argument('--tokenizer', type=str, required=True, choices=['ovl', 'bpe'], help='which tokenizer to use, bpe or overlapping k-mer')
     parser.add_argument('--size', type=str, required=True, choices=['4M', '20M', '90M'], help='what bert config to use [small, medium, large]')
     parser.add_argument('--gpu', type=int, required=True, help='which gpu id to use for training')
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 def main() -> None:
 
@@ -212,7 +211,7 @@ def main() -> None:
 
     cmdargs = parse_cmdline_args()
 
-    logger = get_logger('train')
+    logger = get_logger('<train>')
 
     match cmdargs.size:
 
