@@ -2,27 +2,26 @@ import numpy
 import torch
 import random
 import argparse
-from datasets import load_dataset
-from transformers import (
-    DataCollatorForLanguageModeling, PreTrainedTokenizer,
-    BertForMaskedLM, AutoTokenizer, BertConfig, Trainer, set_seed,
-)
+from datasets import load_dataset, Dataset
+from transformers import DataCollatorForLanguageModeling, PreTrainedTokenizer, AutoTokenizer
+from transformers import BertForMaskedLM, BertConfig, Trainer, set_seed
 
 from src.tokenizer import train_bpe_tokenizer, make_iterator, clean_text
-from src.utils import get_config_4M, get_config_20M, get_config_90M
-from src.utils import get_training_args, count_parameters, make_run_path, get_logger
+from src.utils import count_parameters, make_run_path, get_logger
+from src.utils import get_training_args, get_config_4M, get_config_20M, get_config_90M
 
-def get_collator(tokenizer):
-    '''define the MLM config here if needed'''
-    return DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=True, mlm_probability=0.15)
+def get_collator(tokenizer: PreTrainedTokenizer) -> DataCollatorForLanguageModeling:
+    '''Make MaskedLM data collator.'''
+    return DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=True)
 
 def train(
-        bertconfig: BertConfig, 
-        tokenizer: PreTrainedTokenizer, 
-        collator: DataCollatorForLanguageModeling, 
-        train_dataset, eval_dataset, 
-        prefix: str, **args,
-    ):
+    bertconfig: BertConfig, 
+    tokenizer: PreTrainedTokenizer, 
+    collator: DataCollatorForLanguageModeling, 
+    train_dataset: Dataset, eval_dataset: Dataset, 
+    prefix: str, **args,
+) -> None:
+
     '''Core train function.'''
 
     logger = args['logger']
@@ -67,7 +66,7 @@ def train_text(**args):
     logger = args['logger']
 
     if args['tokenizer_name'] != 'bpe': 
-        logger.fatal('for text only bpe tokenizer is supported')
+        logger.fatal(' for text only bpe tokenizer is supported')
         exit(1)
 
     dataset_name = 'wikimedia/wikipedia'
@@ -164,10 +163,6 @@ def train_dna(**args):
             tokenizer = AutoTokenizer.from_pretrained('InstaDeepAI/nucleotide-transformer-2.5b-multi-species')
             logger.info(f' loading tokenizer done.')
 
-        case _: 
-            logger.fatal(' tokenizer not supported')
-            exit(1)
-
     bertconfig.vocab_size   = tokenizer.vocab_size
     bertconfig.pad_token_id = tokenizer.pad_token_id
     bertconfig.bos_token_id = getattr(tokenizer, 'bos_token_id', None)
@@ -204,18 +199,37 @@ def parse_cmdline_args():
     parser = argparse.ArgumentParser(description='Train N BERT models on either text or dna.')
     parser.add_argument('--type', type=str, required=True, choices=['text', 'dna'], help='whether to train on text or dna')
     parser.add_argument('--tokenizer', type=str, required=True, choices=['ovl', 'bpe'], help='which tokenizer to use, bpe or overlapping k-mer')
+    parser.add_argument('--size', type=str, required=True, choices=['4M', '20M', '90M'], help='what bert config to use [small, medium, large]')
     parser.add_argument('--gpu', type=int, required=True, help='which gpu id to use for training')
     args = parser.parse_args()
     return args
 
-def main():
-    args = get_config_90M()
+def main() -> None:
+
+    import warnings, pprint
+
+    warnings.simplefilter('ignore')
 
     cmdargs = parse_cmdline_args()
-    args['tokenizer_name'] = cmdargs.tokenizer
 
     logger = get_logger('train')
+
+    match cmdargs.size:
+
+        case '90M': 
+            logger.info(' using 90M parameters config')
+            args = get_config_90M()
+
+        case '20M': 
+            logger.info(' using 20M parameters config')
+            args = get_config_20M()
+
+        case '4M': 
+            logger.info(' using 4M parameters config')
+            args = get_config_4M()
+
     args['logger'] = logger
+    args['tokenizer_name'] = cmdargs.tokenizer
 
     gpu = cmdargs.gpu
     device = f'cuda:{gpu}'
@@ -223,9 +237,9 @@ def main():
     torch.cuda.set_device(gpu)
 
     logger.info(f' available gpus: {torch.cuda.device_count()}')
-    logger.info(f' current cuda device: {torch.cuda.current_device()}')
+    logger.info(f' current cuda device: {torch.cuda.current_device()} ({device})')
 
-    for k, v in args.items(): logger.info(f' {k}={v}')
+    logger.info(f' args:\n{pprint.pformat(args, indent=0, underscore_numbers=True)}')
 
     match cmdargs.type: # dispatch to correct data modality
 
@@ -237,9 +251,4 @@ def main():
             logger.info(' training on dna')
             train_dna(**args)
 
-        case _ : 
-            logger.fatal(' data modality not supported')
-            exit(1)
-
 if __name__ == '__main__': main()
-

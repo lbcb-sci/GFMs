@@ -1,12 +1,10 @@
 import os
-import argparse
 import torch 
 import numpy as np
+import argparse
 
-from src.utils.utils import get_models_path, load_many_embeddings
 from src import metrics
-
-# TODO/ update the loading of the models here
+from src.utils import get_models_path, load_many_embeddings
 
 @torch.no_grad()
 def main():

@@ -1,15 +1,16 @@
 import re
-from transformers import PreTrainedTokenizerFast
+from datasets import Dataset
 from tokenizers import Tokenizer
 from tokenizers.models import BPE
 from tokenizers.trainers import BpeTrainer
 from tokenizers.pre_tokenizers import Whitespace
+from transformers import PreTrainedTokenizerFast
 
-_UNK_TOKEN = '<UNK>'; PAD_TOKEN = '<PAD>'; CLS_TOKEN = '<CLS>'; SEP_TOKEN = '<SEP>'; MASK_TOKEN = '<MASK>'
-_SPECIAL_TOKENS = [_UNK_TOKEN, PAD_TOKEN, CLS_TOKEN, SEP_TOKEN, MASK_TOKEN]
+_UNK = '<UNK>'; _PAD = '<PAD>'; _CLS = '<CLS>'; _SEP = '<SEP>'; _MASK = '<MASK>'
+_SPECIAL_TOKENS = [_UNK, _PAD, _CLS, _SEP, _MASK]
 
 def train_bpe_tokenizer(iterator, vocab_size: int) -> PreTrainedTokenizerFast:
-    tokenizer = Tokenizer(BPE(unk_token=_UNK_TOKEN))
+    tokenizer = Tokenizer(BPE(unk_token=_UNK))
     tokenizer.pre_tokenizer = Whitespace()
 
     trainer = BpeTrainer(
@@ -21,11 +22,11 @@ def train_bpe_tokenizer(iterator, vocab_size: int) -> PreTrainedTokenizerFast:
 
     fast_tokenizer = PreTrainedTokenizerFast(
         tokenizer_object=tokenizer,
-        unk_token=_UNK_TOKEN,
-        pad_token=PAD_TOKEN,
-        cls_token=CLS_TOKEN,
-        sep_token=SEP_TOKEN,
-        mask_token=MASK_TOKEN,
+        unk_token=_UNK,
+        pad_token=_PAD,
+        cls_token=_CLS,
+        sep_token=_SEP,
+        mask_token=_MASK,
     )
 
     return fast_tokenizer
@@ -38,11 +39,12 @@ def clean_text(s: str) -> str:
     s = re.sub(_ALLOWED, " ", s)
     return s.strip()
 
-def make_iterator(dataset):
+def make_iterator(dataset: Dataset):
     def iterator():
         for example in dataset:
             text = example["text"]
             if not isinstance(text, str): continue
             text = clean_text(text)
             if text.strip(): yield text
+
     return iterator

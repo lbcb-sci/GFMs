@@ -2,7 +2,7 @@ from transformers import BertConfig, TrainingArguments
 from torch.multiprocessing import cpu_count
 
 def get_training_args(seed: int, **args):
-    '''Wrapper for transformers.TrainingArguments.'''
+    '''Wrapper for `transformers.TrainingArguments`.'''
 
     workers = min(cpu_count() - 1, args['batch_size'])
 
@@ -24,7 +24,7 @@ def get_training_args(seed: int, **args):
 
 # base configuration for training on 1b tokens
 base = {
-    'N': 5,    # number of models to train
+    'N': 3,    # number of models to train
     'kmer': 6, # vocab size = 4**kmer + special tokens
 
     'epochs': 10,
@@ -45,21 +45,22 @@ _test = { # very small config for testing
     'train_size': 200,
 }
 
-# base = _test; print('USING DUMMY TEST CONFIG') # uncomment for testing that everything works properly
+#base = _test; print('USING DUMMY TEST CONFIG') # uncomment for testing that everything works properly
 
 # the 3 functions below only change the size of the BERT model used.
 
 def get_config_90M() -> dict:
     '''
-    get config with a 90M params bert model
-    this one simply returns the default bert configuration as provided by huggingface
+    Get config with a 90M params BERT model.
+
+    (This one simply returns the default BERT configuration as provided by HuggingFace.)
     '''
     config = base.copy()
     config['bertconfig'] = BertConfig()
     return config
 
 def get_config_20M() -> dict:
-    '''get config with a 20M params bert model'''
+    '''Get config with a 20M params BERT model.'''
     config = base.copy()
     config['bertconfig'] = BertConfig(
         hidden_size=512,
@@ -70,7 +71,7 @@ def get_config_20M() -> dict:
     return config
 
 def get_config_4M() -> dict:
-    '''get config with a 4M params bert model'''
+    '''Get config with a 4M params BERT model.'''
     config = base.copy()
     config['bertconfig'] = BertConfig(
         hidden_size=256,
