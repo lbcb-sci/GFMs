@@ -4,12 +4,13 @@ import argparse
 from pathlib import Path
 from transformers import BertForMaskedLM
 
-from src.utils import get_logger, count_parameters
-from .static import static_analysis
+from .static  import static_analysis
 from .dynamic import dynamic_analysis
+from src.utils import get_logger, count_parameters
 
 def load_models(args) -> dict:
     logger = args.logger
+    device = args.device
     runs = [Path(run) for run in args.runs]
 
     paths = {}
@@ -23,7 +24,7 @@ def load_models(args) -> dict:
     for run, models_path in paths.items():
         models[run] = []
         for model_path in models_path:
-            model = BertForMaskedLM.from_pretrained(model_path, local_files_only=True)
+            model = BertForMaskedLM.from_pretrained(model_path, local_files_only=True).to(device)
             logger.info(f' model [{model_path}] has {count_parameters(model):,} parameters')
             models[run].append(model)
 
@@ -34,10 +35,8 @@ def parse_args():
     parser.add_argument('--runs', type=str, nargs='+', required=True)
     return parser.parse_args()
 
-@torch.no_grad()
 @torch.autograd.inference_mode()
 def main() -> None:
-    import pprint 
 
     args = parse_args()
 
@@ -45,12 +44,20 @@ def main() -> None:
     logger.info(f' args: {args}')
     args.logger = logger
 
+    args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    logger.info(f' running computations on device {args.device}')
+
     models = load_models(args)
     models = {str(k).replace('runs/', ''): v for k, v in models.items()}
 
     logger.info(' running static analysis...')
-    static_result = static_analysis(models)
-    logger.info(f' results: {pprint.pformat(static_result)}')
+    static_results = static_analysis(models, logger)
+    logger.info(' static analysis done.\n')
+
+    for run, metrics in static_results.items():
+        for metric, (mean, std) in metrics.items():  
+            logger.info(f' run[{run}] metric[{metric}]: {mean:.3f} ({std:.5f})')
+        logger.info('')
 
     #logger.info(' running dynamic analysis...')
 
