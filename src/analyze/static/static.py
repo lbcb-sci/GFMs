@@ -37,7 +37,8 @@ def static_analysis(models_dict: dict, logger) -> dict:
 
         #### CKA
         logger.info(f' computing cka...')
-        data[run]['cka'] = cka(embeddings)
+        data[run]['linear cka'] = cka(embeddings, kernel='linear')
+        data[run]['rbf cka'] = cka(embeddings, kernel='rbf')
 
         logger.info(f' computing cka done.')
 

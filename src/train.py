@@ -240,6 +240,8 @@ def main() -> None:
 
     logger.info(f' args:\n{pprint.pformat(args, indent=0, underscore_numbers=True)}')
 
+    logger.info(f' training on {args["epochs"]*args["train_size"]*args["max_length"]:,} tokens')
+
     match cmdargs.type: # dispatch to correct data modality
 
         case 'text': 

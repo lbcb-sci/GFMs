@@ -16,10 +16,11 @@ def jaccard(A: list, B: list):
     inter, union = len(setA & setB), len(setA | setB)
     return inter / union if union > 0 else 0.0
 
-def centered_kernel_alignment(A: Tensor, B: Tensor):
+def centered_kernel_alignment(A: Tensor, B: Tensor, kernel: str):
     '''Wrapper for cka_base from `ckatorch`.'''
+    assert kernel in ['linear', 'rbf']
     # TODO: why do they have to be mapped to cpu for cka_base to work?
-    return cka_base(A.cpu(), B.cpu(), kernel='linear')
+    return cka_base(A.cpu(), B.cpu(), kernel=kernel)
 
 def topk_overlap(cosimA: Tensor, cosimB: Tensor, k: int) -> Tensor:
     '''
@@ -55,13 +56,19 @@ def compute_pairwise(data: Iterable, metric: Callable) -> Tensor:
         for b in data[i+1:]: results.append(metric(a, b))
     return torch.as_tensor(results)
 
-def cka(embeddings: Tensor): 
+def cka(embeddings: Tensor, kernel: str): 
     '''Compute pairwise Centered Kernel Alignment.'''
-    return meanstd(compute_pairwise(embeddings, metric=centered_kernel_alignment))
+    return meanstd(compute_pairwise(
+        embeddings, 
+        metric=partial(centered_kernel_alignment, kernel=kernel),
+    ))
 
 def topk(embeddings: Tensor, k: int): 
     '''Compute pairwise Top-K Overlap.'''
-    return meanstd(compute_pairwise(embeddings, metric=partial(topk_overlap, k=k)))
+    return meanstd(compute_pairwise(
+        embeddings, 
+        metric=partial(topk_overlap, k=k),
+    ))
 
 def meanstd(values: Iterable) -> tuple[float, float]:
     '''Wrapper for mean and std.'''

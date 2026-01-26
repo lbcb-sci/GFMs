@@ -24,11 +24,11 @@ def get_training_args(seed: int, **args):
 
 # base configuration for training on 1b tokens
 base = {
-    'N': 3,    # number of models to train
+    'N': 2,    # number of models to train
     'kmer': 6, # vocab size = 4**kmer + special tokens
 
     'epochs': 10,
-    'batch_size': 128,
+    'batch_size': 256,
     'max_length': 512,
     'eval_size': 5_000,
     'train_size': 200_000,
