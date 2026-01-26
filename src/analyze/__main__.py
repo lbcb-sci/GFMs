@@ -2,11 +2,28 @@ import os
 import torch
 import argparse
 from pathlib import Path
-from transformers import BertForMaskedLM
+from transformers import BertForMaskedLM, AutoTokenizer
 
 from .static  import static_analysis
 from .dynamic import dynamic_analysis
 from src.utils import get_logger, count_parameters
+
+def load_tokenizers(args) -> dict:
+    runs = [Path(run) for run in args.runs]
+
+    paths = {}
+    for run in runs:
+        tokenizers = os.listdir(run)
+        paths[run] = [run / tokenizer for tokenizer in tokenizers]
+
+    tokenizers = {}
+    for run, models_path in paths.items():
+        tokenizers[run] = []
+        for model_path in models_path:
+            tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
+            tokenizers[run].append(tokenizer)
+
+    return tokenizers
 
 def load_models(args) -> dict:
     logger = args.logger
@@ -33,6 +50,7 @@ def load_models(args) -> dict:
 def parse_args():
     parser = argparse.ArgumentParser(description='Analyze the trained models.')
     parser.add_argument('--runs', type=str, nargs='+', required=True)
+    parser.add_argument('--type', type=str, required=True, choices=['static', 'dynamic'])
     return parser.parse_args()
 
 @torch.autograd.inference_mode()
@@ -50,15 +68,23 @@ def main() -> None:
     models = load_models(args)
     models = {str(k).replace('runs/', ''): v for k, v in models.items()}
 
-    logger.info(' running static analysis...')
-    static_results = static_analysis(models, logger)
-    logger.info(' static analysis done.\n')
+    tokenizers = load_tokenizers(args)
+    tokenizers = {str(k).replace('runs/', ''): v for k, v in tokenizers.items()}
 
-    for run, metrics in static_results.items():
-        for metric, (mean, std) in metrics.items():  
-            logger.info(f' run[{run}] metric[{metric}]: {mean:.3f} ({std:.5f})')
-        logger.info('')
+    match args.type:
+        case 'static': 
+            logger.info(' running static analysis...')
+            static_results = static_analysis(models, logger)
+            logger.info(' static analysis done.\n')
 
-    #logger.info(' running dynamic analysis...')
+            for run, metrics in static_results.items():
+                logger.info(' ' + run)
+                for metric, (mean, std) in metrics.items():  
+                    logger.info(f' run[{run}] metric[{metric}]: {mean:.3f} ({std:.5f})')
+
+        case 'dynamic': 
+            logger.info(' running dynamic analysis...')
+            dynamic_results = dynamic_analysis(models, tokenizers, logger)
+            print(dynamic_results)
 
 if __name__ == '__main__': main()

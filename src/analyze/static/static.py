@@ -4,8 +4,7 @@ from transformers import BertForMaskedLM
 from .metrics import (
     cosine_similarity, 
     std_per_token,
-    topk, 
-    cka, 
+    topk, cka, 
 )
 
 def extract_word_embeddings(models: list[BertForMaskedLM]) -> Tensor:
