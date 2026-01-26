@@ -66,3 +66,8 @@ def topk(embeddings: Tensor, k: int):
 def meanstd(values: Iterable) -> tuple[float, float]:
     '''Wrapper for mean and std.'''
     return torch.mean(values).item(), torch.std(values).item()
+
+def std_per_token(cosims_stacked: Tensor) -> True:
+    '''Return mean standard deviation of cosine similarities across models, per token.'''
+    assert cosims_stacked.dim() == 3
+    return cosims_stacked.std(dim=0).mean(), 0.0
