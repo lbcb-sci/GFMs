@@ -9,6 +9,7 @@ models
 
 .python-version
 results
+cache
 
 # C extensions
 *.so

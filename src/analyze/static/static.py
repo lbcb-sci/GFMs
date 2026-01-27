@@ -1,16 +1,14 @@
 import torch 
 from torch import Tensor
 from transformers import BertForMaskedLM
-from .metrics import (
-    cosine_similarity, 
-    std_per_token,
-    topk, cka, 
-)
+
+from .metrics import cosine_similarity, std_per_token, topk, cka
 
 def extract_word_embeddings(models: list[BertForMaskedLM]) -> Tensor:
     '''Returns a 3d tensor of stacked word embeddings.'''
     return torch.stack([model.bert.embeddings.word_embeddings.weight.detach() for model in models], dim=0)
 
+@torch.autograd.grad_mode.inference_mode()
 def static_analysis(models_dict: dict, logger) -> dict:
     '''Main static analysis function, collecting metrics and returning dict of values.'''
 

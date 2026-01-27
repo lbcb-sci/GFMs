@@ -2,6 +2,7 @@ from .utils import (
     get_logger, 
     make_run_path, 
     get_plots_path, 
+    get_cache_path,
     count_parameters, 
     load_model, 
     load_many_embeddings,

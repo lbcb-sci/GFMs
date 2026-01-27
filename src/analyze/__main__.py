@@ -2,13 +2,14 @@ import os
 import torch
 import argparse
 from pathlib import Path
-from transformers import BertForMaskedLM, AutoTokenizer
+from transformers import BertConfig, BertForMaskedLM, AutoTokenizer
+import pprint
 
 from .static  import static_analysis
 from .dynamic import dynamic_analysis
 from src.utils import get_logger, count_parameters
 
-def load_tokenizers(args) -> dict:
+def load_tokenizer(args):
     runs = [Path(run) for run in args.runs]
 
     paths = {}
@@ -21,9 +22,7 @@ def load_tokenizers(args) -> dict:
         tokenizers[run] = []
         for model_path in models_path:
             tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
-            tokenizers[run].append(tokenizer)
-
-    return tokenizers
+            return tokenizer
 
 def load_models(args) -> dict:
     logger = args.logger
@@ -41,7 +40,11 @@ def load_models(args) -> dict:
     for run, models_path in paths.items():
         models[run] = []
         for model_path in models_path:
-            model = BertForMaskedLM.from_pretrained(model_path, local_files_only=True).to(device)
+            config = BertConfig.from_pretrained(model_path, local_files_only=True)
+            config.output_attentions = True # output attention scores
+
+            model = BertForMaskedLM.from_pretrained(model_path, config=config).to(device)
+
             logger.info(f' model [{model_path}] has {count_parameters(model):,} parameters')
             models[run].append(model)
 
@@ -55,6 +58,8 @@ def parse_args():
 
 @torch.autograd.inference_mode()
 def main() -> None:
+    import warnings
+    warnings.simplefilter('ignore')
 
     args = parse_args()
 
@@ -67,9 +72,6 @@ def main() -> None:
 
     models = load_models(args)
     models = {str(k).replace('runs/', ''): v for k, v in models.items()}
-
-    tokenizers = load_tokenizers(args)
-    tokenizers = {str(k).replace('runs/', ''): v for k, v in tokenizers.items()}
 
     match args.type:
         case 'static': 
@@ -84,7 +86,7 @@ def main() -> None:
 
         case 'dynamic': 
             logger.info(' running dynamic analysis...')
-            dynamic_results = dynamic_analysis(models, tokenizers, logger)
-            print(dynamic_results)
+            tokenizer = load_tokenizer(args)
+            dynamic_results = dynamic_analysis(models, tokenizer, logger)
 
 if __name__ == '__main__': main()

@@ -26,6 +26,11 @@ def get_plots_path() -> Path:
     data_dir.mkdir(exist_ok=True)
     return data_dir
 
+def get_cache_path() -> Path: 
+    data_dir = get_runs_path().parent / 'cache'
+    data_dir.mkdir(exist_ok=True)
+    return data_dir
+
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 

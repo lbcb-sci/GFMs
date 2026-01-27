@@ -16,12 +16,14 @@ class CudaWrapper(Dataset):
         item = self.base[idx]
         return {k: (v.to(self.device) if torch.is_tensor(v) else v) for k, v in item.items()}
 
-def get_dataset(path: str, name: str = None, n: int = 2000) -> Dataset:
-    # index from the end to get unseen samples
-    return load_dataset(path, name, split=f'train[-{n}:]')
+def get_dataset(path: str, name: str, n: int) -> Dataset:
+    ## index from the end to get unseen samples
+    #return load_dataset(path, name, split=f'train[-{n}:]')
+    dataset = load_dataset(path, name, split=f'train[-{n}:]')
+    return dataset
 
 def get_dataset_dna(n: int = 2000) -> Dataset:
-    return get_dataset('zhangtaolab/plant-reference-genomes', n=n)
+    return get_dataset('zhangtaolab/plant-reference-genomes', name=None, n=n)
 
 def get_dataset_text(n: int = 2000) -> Dataset:
-    return get_dataset('wikimedia/wikipedia', '20231101.en', n=n)
+    return get_dataset('wikimedia/wikipedia', name='20231101.en', n=n)
