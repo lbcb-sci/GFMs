@@ -2,37 +2,58 @@ from transformers import BertConfig, TrainingArguments
 from torch.multiprocessing import cpu_count
 
 def get_training_args(seed: int, **args):
-    '''Wrapper for `transformers.TrainingArguments`.'''
+    '''
+    Wrapper for `transformers.TrainingArguments`.
 
-    workers = min(cpu_count() - 1, args['batch_size'])
+    Applies args and ensures random model initialization but deterministic data.
+    '''
+
+    workers = min(cpu_count() // 2, args['batch_size'])
 
     return TrainingArguments(
+        # batch size
         per_device_train_batch_size=args['batch_size'],
         per_device_eval_batch_size=args['batch_size'],
+
+        # epochs
         num_train_epochs=args['epochs'],
+
+        # keep model that performs best on unseen data
         metric_for_best_model='eval_loss',
-        dataloader_num_workers=workers,
         load_best_model_at_end=True,
         greater_is_better=False,
+        save_strategy='best',
+
+        # use many workers for dl
+        dataloader_num_workers=workers,
         logging_strategy='epoch',
         eval_strategy='epoch',
-        save_strategy='best',
+
+        # lr
         learning_rate=5e-4,
+
+        # warmup
         warmup_ratio=0.1,
+
+        # wandb
+        report_to='wandb',
+
+        # seeds (random model init but not data)
         seed=seed,
+        data_seed=42, # deterministic dataloader
     )
 
 # base configuration for training on 1b tokens
 base = {
-    'N': 2,    # number of models to train
+    'N': 5,    # number of models to train
     'kmer': 6, # vocab size = 4**kmer + special tokens
 
-    'epochs': 10,
+    'epochs': 5,
     'batch_size': 256,
     'max_length': 512,
-    'eval_size': 5_000,
-    'train_size': 200_000,
-    # 10 * 512 * 200'000 = 1.024b tokens
+    'eval_size': 10_000,
+    'train_size': 1_000_000,
+    # 5 * 512 * 1M ~ 2.5b tokens
 }
 
 _test = { # very small config for testing
@@ -45,7 +66,7 @@ _test = { # very small config for testing
     'train_size': 200,
 }
 
-#base = _test; print('USING DUMMY TEST CONFIG') # uncomment for testing that everything works properly
+# base = _test; print('USING DUMMY TEST CONFIG') # uncomment for testing that everything works properly
 
 # the 3 functions below only change the size of the BERT model used.
 

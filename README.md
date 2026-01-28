@@ -14,7 +14,7 @@ After installing `uv`, you can directly run the commands below, it will install 
 
 ## Usage
 
-There are two main scripts in `src`, `train.py` and `analyze.py`. They should be called as modules (with `-m`).
+There are two main module in `src`, `train` and `analyze`. They should be ran as modules (with `-m`).
 
 ### Configuration
 

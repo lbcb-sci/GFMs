@@ -4,6 +4,8 @@ from scipy.spatial.distance import jensenshannon
 from scipy.stats import entropy
 from transformers import BertForMaskedLM, PreTrainedTokenizer
 import matplotlib.pyplot as plt
+from pprint import pprint
+from tqdm import tqdm, trange
 
 import torch
 from torch import Tensor
@@ -34,11 +36,16 @@ def get_masked_logits(
 
     logits = {}
 
+    correct = 0
+    total = 0
+
     for i, model in enumerate(models):
         logits_i = []
 
-        for batch in dataloader:
+        for batch in tqdm(dataloader, desc=f'getting logits for model {i}'):
             logits_batch = model(**batch).logits
+
+            labels = batch['labels']
 
             masked_mask = (
                 (batch['input_ids'] == tokenizer.mask_token_id) & 
@@ -46,15 +53,22 @@ def get_masked_logits(
                 batch['attention_mask'].bool()
             )
 
+            masked_labels = labels[masked_mask]
+            
             masked_logits = logits_batch[masked_mask]
             logits_i.append(masked_logits)
 
+            correct += (masked_logits.argmax(dim=-1) == masked_labels).float().mean()
+            total += 1
+
         logits[i] = torch.cat(logits_i, dim=0)
+
+    print(f'Masked prediction accuracy: {correct.item() / total:.4f}')
 
     return logits
 
 def top_p(probs: Tensor, p: float) -> Tensor:
-    '''Reweight distribution to keep only the top-p mass.'''
+    '''Reweight distribution to keep only the top-p% mass.'''
 
     sorted_probs, sorted_idx = torch.sort(probs, dim=1, descending=True)
     cum_probs = torch.cumsum(sorted_probs, dim=1)
@@ -65,9 +79,7 @@ def top_p(probs: Tensor, p: float) -> Tensor:
     sorted_probs[mask] = 0.0
     sorted_probs = sorted_probs / sorted_probs.sum(dim=1, keepdim=True)
 
-    out = torch.zeros_like(probs)
-    out.scatter_(1, sorted_idx, sorted_probs)
-    return out
+    return torch.zeros_like(probs).scatter_(1, sorted_idx, sorted_probs)
 
 def jensen_shannon(probs: Tensor) -> float:
     '''Pairwise Jensen-Shannon distance.'''
@@ -90,11 +102,16 @@ def analyze_logits(
     n_tokens = logits[0].shape[0]
     vocab_size = logits[0].shape[1]
     
+    mean_sorted_dist = torch.zeros(vocab_size, device=logits[0].device)
     uniform = torch.ones(vocab_size) / vocab_size
 
-    for i in range(n_tokens):
+    for i in trange(0, n_tokens, 1, desc='computing js'):
+
         logits_token = torch.stack([logits[model][i] for model in logits.keys()])
         probs = F.softmax(logits_token, dim=1)
+
+        sorted_probs, _ = torch.sort(probs, descending=True)
+        mean_sorted_dist += sorted_probs.mean(dim=0)
 
         # KL(Uniform, Probs) = suprisal induced by Props under a Uniform distribution
         kl_uniform.append(entropy(pk=probs.cpu(), qk=uniform, base=2, axis=1).mean())
@@ -105,17 +122,27 @@ def analyze_logits(
             js_p = jensen_shannon(probs_top_p)
             js[p].append(js_p)
 
+    mean_sorted_dist /= n_tokens
+
     for k, v in js.items(): js[k] = numpy.mean(v)
-    return {'js': js, 'kl_uniform': numpy.mean(kl_uniform)}
+    return {'js': js, 'kl_uniform': numpy.mean(kl_uniform), 'mean_dist': mean_sorted_dist.cpu()}
 
 def dynamic_analysis(models_dict: dict, tokenizer: PreTrainedTokenizer, logger):
     preprocess = lambda batch: mlm_preprocess(batch, tokenizer, mask_prob=0.15)
 
+    #seq = 'AAAAAACCCCCCTTTTTTGGGGGG'
+    #out = tokenizer(seq)['input_ids']
+    #dec = tokenizer.decode(out)
+    #print(seq)
+    #print(out)
+    #print(dec)
+    #exit()
+
     logger.info(f' tokenizer: {type(tokenizer)} from {tokenizer.name_or_path}')
     data = {}
 
-    nsamples = 1024
-    batch_size = 128
+    nsamples = 128
+    batch_size = 4
 
     cache_path = get_cache_path()
 
@@ -138,20 +165,46 @@ def dynamic_analysis(models_dict: dict, tokenizer: PreTrainedTokenizer, logger):
                 remove = ['text', 'url', 'id', 'title']
 
             encoded = dataset.map(preprocess, batched=True, remove_columns=remove)
-            encoded.set_format(type='torch', columns=['input_ids', 'attention_mask'])
+            encoded.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
             dataloader = DataLoader(CudaWrapper(encoded), batch_size=batch_size, num_workers=0)
             logits = get_masked_logits(models, dataloader, tokenizer)
             torch.save(logits, cache_path / logits_file)
 
         data[run] = analyze_logits(logits)
 
-    print(data)
+    pprint(data)
 
     for run, result in data.items():
         js = result['js']
-        plt.plot(list(reversed(list(js.keys()))), list(reversed(list(js.values()))), label=run)
-        plt.legend()
-        plt.ylim((0.0, 1.0))
 
+        keys = numpy.array(list(js.keys()))
+        values = numpy.array(list(js.values()))
+
+        idx = numpy.argsort(keys)
+        keys = numpy.sort(keys)
+        values = values[idx]
+
+        print(keys)
+        print(values)
+
+        plt.plot(keys, values, label=run)
+
+    plt.ylim((0.0, 1.0))
+    plt.title('Jensen-Shannon Distance as a Function of Top-P')
+    plt.ylabel('JS')
+    plt.xlabel('top-p mass kept')
+    plt.legend()
+    plt.tight_layout()
     plt.savefig(get_plots_path() / f'js.png', dpi=300)
+    plt.close()
+
+    n = 20
+    fig, ax = plt.subplots(3, figsize=(10, 10))
+    for i, (run, values) in enumerate(data.items()):
+        ax[i].bar(list(range(n)), values['mean_dist'][:n])
+        ax[i].set_ylim((0.0, 1.0))
+        ax[i].set_title(run)
+
+    plt.tight_layout()
+    plt.savefig(get_plots_path() / 'dists.png', dpi=300)
     plt.close()

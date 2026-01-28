@@ -4,7 +4,7 @@ from tokenizers import Tokenizer
 from tokenizers.models import BPE
 from tokenizers.trainers import BpeTrainer
 from tokenizers.pre_tokenizers import Whitespace
-from transformers import PreTrainedTokenizerFast
+from transformers import PreTrainedTokenizerFast, AutoTokenizer
 
 _UNK = '<UNK>'; _PAD = '<PAD>'; _CLS = '<CLS>'; _SEP = '<SEP>'; _MASK = '<MASK>'
 _SPECIAL_TOKENS = [_UNK, _PAD, _CLS, _SEP, _MASK]
@@ -30,6 +30,10 @@ def train_bpe_tokenizer(iterator, vocab_size: int) -> PreTrainedTokenizerFast:
     )
 
     return fast_tokenizer
+
+def load_6mer_tokenizer():
+    '''Load 6-mer tokenizer from Nucleotide Transformer.'''
+    return AutoTokenizer.from_pretrained('InstaDeepAI/nucleotide-transformer-2.5b-multi-species')
 
 _ALLOWED = r"[^a-zA-Z0-9\s.,;:!?\"'()\-–—/\\&%$€@#\[\]{}<>]+"
 

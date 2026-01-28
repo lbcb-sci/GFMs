@@ -2,8 +2,8 @@ import os
 import torch
 import argparse
 from pathlib import Path
+import transformers
 from transformers import BertConfig, BertForMaskedLM, AutoTokenizer
-import pprint
 
 from .static  import static_analysis
 from .dynamic import dynamic_analysis
@@ -60,6 +60,7 @@ def parse_args():
 def main() -> None:
     import warnings
     warnings.simplefilter('ignore')
+    transformers.utils.logging.set_verbosity_error()
 
     args = parse_args()
 
