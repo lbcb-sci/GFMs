@@ -20,12 +20,13 @@ def get_training_args(seed: int, **args):
 
         # keep model that performs best on unseen data
         metric_for_best_model='eval_loss',
-        load_best_model_at_end=True,
+        load_best_model_at_end=True, # load the best model (to be saved) at the end
         greater_is_better=False,
-        save_strategy='best',
+        save_strategy='epoch', # save model at the end of each epoch
 
         # use many workers for dl
         dataloader_num_workers=workers,
+
         logging_strategy='epoch',
         eval_strategy='epoch',
 
@@ -36,7 +37,8 @@ def get_training_args(seed: int, **args):
         warmup_ratio=0.1,
 
         # wandb
-        report_to='wandb',
+        report_to='wandb', # log to wandb
+        logging_steps=1,   # how often to log to wandb
 
         # seeds (random model init but not data)
         seed=seed,

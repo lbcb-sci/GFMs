@@ -13,4 +13,5 @@ dependencies = [
     "tokenizers>=0.22.2",
     "torch>=2.10.0",
     "transformers>=5.0.0",
+    "wandb>=0.24.0",
 ]
