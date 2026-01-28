@@ -22,29 +22,29 @@ The configuration of the models can be set in `src/utils/config.py` it defaults 
 
 ### Training
 
-First you need to train the models:
+First, you will need to train the models:
 ```bash
-uv run -m src.train --type {text, dna} --tokenizer {bpe, ovl} --gpu <GPU_ID> 
+uv run -m src.train --type {text, dna} --tokenizer {bpe, kmer} 
 # all other hyperparams can be set in the utils/config.py file
 ```
 
 Models are saved in `runs/<timestamp>_<type>_<tokenizer>/<id>` so that they can be retrieved later for analysis.
 
-For example, if you run `uv run -m src.train --type dna --tokenizer ovl --gpu 0`, it will create:
+For example, if you run `uv run -m src.train --type dna --tokenizer kler`, it will create:
 ```bash
-runs/<timestamp>_dna_ovl/1
-runs/<timestamp>_dna_ovl/2
+runs/<timestamp>_dna_kmer/1
+runs/<timestamp>_dna_kmer/2
 ...
-runs/<timestamp>_dna_ovl/N
+runs/<timestamp>_dna_kmer/N
 ```
 for $N$ specified in the config files ($N=5$ by default).
 
 ### Analysis
 
-#### Static (word embedings)
+#### Static (Word Embedings)
 
-TODO
+We aim to see if models tend to agree on which tokens should be close in embedding space.
 
-#### Dynamic
+#### Distributions
 
-TODO
+We look at the distributions of BERT models over masked tokens of unseen sequence during training. 
