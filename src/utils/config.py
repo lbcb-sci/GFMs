@@ -39,7 +39,7 @@ def get_training_args(run_name: str, seed: int, **args):
         report_to='wandb', # log to wandb
         run_name=run_name,
         logging_strategy='steps',
-        logging_steps=500, # how often to log to wandb
+        logging_steps=100, # how often to log to wandb
 
         max_grad_norm=1.0,
 
@@ -58,7 +58,7 @@ base = {
     'epochs': 5,
     'batch_size': 64,
     'max_length': 512,
-    'eval_size':  10_000,
+    'eval_size': 10_000,
     'train_size': 2_000_000,
     # 5 * 512 * 2M ~ 5b tokens
 }
