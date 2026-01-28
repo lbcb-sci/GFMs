@@ -1,8 +1,9 @@
 '''Simplest persistent cache ever.'''
 
 import torch
-from torch import Tensor
 from os import listdir
+from torch import Tensor
+
 from .utils import get_cache_path
 
 def cached(filename: str) -> bool:

@@ -2,11 +2,11 @@ import numpy
 import torch
 import random
 from datasets import Dataset
-from transformers import DataCollatorForLanguageModeling, PreTrainedTokenizer
 from transformers import BertForMaskedLM, BertConfig, Trainer, set_seed
+from transformers import DataCollatorForLanguageModeling, PreTrainedTokenizer
 
-from src.utils import count_parameters, get_run_path, get_training_args
 from .tokenizer import train_bpe_tokenizer, load_6mer_tokenizer, make_iterator, clean_text
+from src.utils import count_parameters, get_run_path, get_training_args
 from .data import get_dataset_text, get_dataset_dna
 
 def train(type: str, **args) -> None:

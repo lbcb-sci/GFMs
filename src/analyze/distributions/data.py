@@ -1,8 +1,8 @@
 '''Moved data related funcs here to make dynamic.py cleaner.'''
 
 import torch
-from torch.utils.data import Dataset
 from datasets import load_dataset
+from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer
 
 class DeviceWrapper(Dataset):

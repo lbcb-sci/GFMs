@@ -1,6 +1,6 @@
+import logging
 from time import time
 from pathlib import Path
-import logging
 
 def get_logger(name: str):
     logging.basicConfig(level=logging.INFO)

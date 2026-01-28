@@ -1,5 +1,5 @@
-from transformers import BertConfig, TrainingArguments 
 from torch.multiprocessing import cpu_count
+from transformers import BertConfig, TrainingArguments 
 
 def get_training_args(seed: int, **args):
     '''

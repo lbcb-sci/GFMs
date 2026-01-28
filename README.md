@@ -24,7 +24,7 @@ The configuration of the models can be set in `src/utils/config.py` it defaults 
 
 First, you will need to train the models:
 ```bash
-uv run -m src.train --type {text, dna} --tokenizer {bpe, kmer} 
+uv run -m src.train --type {text, dna} --tokenizer {bpe, kmer} --size {4M, 20M, 90M}
 # all other hyperparams can be set in the utils/config.py file
 ```
 
