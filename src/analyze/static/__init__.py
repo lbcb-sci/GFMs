@@ -1,1 +1,1 @@
-from .static import static_analysis
+from .static import analyze_word_embeddings

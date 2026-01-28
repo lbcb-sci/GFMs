@@ -1,13 +1,14 @@
 [project]
 name = "GFMs"
 dynamic = ["version"]
-description = "Critical analysis of Genomic Foundation Models"
+description = "Critical analysis of Genomic Foundation Models."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "accelerate>=1.1.0",
     "ckatorch>=1.0.2",
     "datasets>=4.5.0",
+    "joblib>=1.5.3",
     "numpy>=2.4.1",
     "scipy>=1.17.0",
     "tokenizers>=0.22.2",

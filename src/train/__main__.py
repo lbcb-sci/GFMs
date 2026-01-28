@@ -5,13 +5,6 @@ import argparse
 from src.utils import get_logger, get_config_4M, get_config_20M, get_config_90M
 from .train import train
 
-def parse_cmdline_args():
-    parser = argparse.ArgumentParser(description='Train N BERT models on either text or dna.')
-    parser.add_argument('--type', type=str, required=True, choices=['text', 'dna'], help='whether to train on text or dna')
-    parser.add_argument('--tokenizer', type=str, required=True, choices=['kmer', 'bpe'], help='which tokenizer to use, bpe or k-mer')
-    parser.add_argument('--size', type=str, required=True, choices=['4M', '20M', '90M'], help='what bert config to use [small, medium, large]')
-    return parser.parse_args()
-
 def main() -> None:
     cmdargs = parse_cmdline_args()
     logger = get_logger('<train>')
@@ -39,5 +32,12 @@ def main() -> None:
     logger.info(f' args:\n{pprint.pformat(args, indent=0, underscore_numbers=True)}')
 
     train(cmdargs.type, **args)
+
+def parse_cmdline_args():
+    parser = argparse.ArgumentParser(description='Train N BERT models on either text or dna.')
+    parser.add_argument('--type', type=str, required=True, choices=['text', 'dna'], help='whether to train on text or dna')
+    parser.add_argument('--tokenizer', type=str, required=True, choices=['kmer', 'bpe'], help='which tokenizer to use, bpe or k-mer')
+    parser.add_argument('--size', type=str, required=True, choices=['4M', '20M', '90M'], help='what bert config to use [small, medium, large]')
+    return parser.parse_args()
 
 if __name__ == '__main__': main()
