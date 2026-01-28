@@ -35,9 +35,12 @@ def main() -> None:
 
 def parse_cmdline_args():
     parser = argparse.ArgumentParser(description='Train N BERT models on either text or dna.')
-    parser.add_argument('--type', type=str, required=True, choices=['text', 'dna'], help='whether to train on text or dna')
-    parser.add_argument('--tokenizer', type=str, required=True, choices=['kmer', 'bpe'], help='which tokenizer to use, bpe or k-mer')
-    parser.add_argument('--size', type=str, required=True, choices=['4M', '20M', '90M'], help='what bert config to use [small, medium, large]')
+    parser.add_argument('--type', type=str, required=True, 
+                        choices=['text', 'dna'], help='whether to train on text or dna')
+    parser.add_argument('--tokenizer', type=str, required=True, 
+                        choices=['kmer', 'bpe'], help='which tokenizer to use, bpe or k-mer')
+    parser.add_argument('--size', type=str, required=False, default='90M', 
+                        choices=['4M', '20M', '90M'], help='what bert config to use [small, medium, large]')
     return parser.parse_args()
 
 if __name__ == '__main__': main()

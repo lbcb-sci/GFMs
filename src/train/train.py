@@ -2,8 +2,8 @@ import numpy
 import torch
 import random
 from datasets import Dataset
-from transformers import BertForMaskedLM, BertConfig, Trainer, set_seed
-from transformers import DataCollatorForLanguageModeling, PreTrainedTokenizer
+from transformers import BertForMaskedLM, BertConfig
+from transformers import DataCollatorForLanguageModeling, Trainer, set_seed
 
 from .tokenizer import train_bpe_tokenizer, load_6mer_tokenizer, make_iterator, clean_text
 from src.utils import count_parameters, get_run_path, get_training_args
@@ -53,9 +53,7 @@ def train(type: str, **args) -> None:
     bertconfig.bos_token_id    = getattr(tokenizer, 'bos_token_id', None)
     bertconfig.eos_token_id    = getattr(tokenizer, 'eos_token_id', None)
 
-    print(tokenizer)
-
-    logger.info(f' getting tokenizer done. vocab size = {tokenizer.vocab_size}')
+    logger.info(f' getting tokenizer done, vocab size = {tokenizer.vocab_size}')
     logger.info(f' first 20 tokens: {list(tokenizer.get_vocab().keys())[:20]}')
 
     def preprocess(batch):
@@ -80,11 +78,10 @@ def train(type: str, **args) -> None:
 
     args.pop('bertconfig')
 
-    return _train(bertconfig, tokenizer, data_collator, train_encoded, eval_encoded, type, **args)
+    return _train(bertconfig, data_collator, train_encoded, eval_encoded, type, **args)
 
 def _train(
     bertconfig: BertConfig, 
-    tokenizer: PreTrainedTokenizer, 
     collator: DataCollatorForLanguageModeling, 
     train_dataset: Dataset, 
     eval_dataset: Dataset, 
@@ -95,17 +92,23 @@ def _train(
     '''Core train function.'''
 
     logger = args['logger']
+    logger.info(f' model config: {bertconfig}')
     N = args['N']
     save_path = get_run_path(prefix, args['tokenizer_name'])
 
     for seed in range(1, N+1):
-        training_args = get_training_args(seed, **args)
+
+        training_args = get_training_args(
+            run_name=f'{str(save_path).split('/')[-1]}/{seed}', 
+            seed=seed, 
+            **args,
+        )
 
         # making sure model gets different initialization every time!
         set_seed(seed); random.seed(seed); numpy.random.seed(seed)
         torch.manual_seed(seed); torch.cuda.manual_seed_all(seed)
 
-        model = BertForMaskedLM(bertconfig).to(args['device'])
+        model = BertForMaskedLM(bertconfig)
         logger.info(f' model device: {next(model.parameters()).device}')
 
         nparams = count_parameters(model)
@@ -115,7 +118,6 @@ def _train(
         trainer = Trainer(
             model=model,
             args=training_args,
-            tokenizer=tokenizer,
             data_collator=collator,
             eval_dataset=eval_dataset,
             train_dataset=train_dataset,

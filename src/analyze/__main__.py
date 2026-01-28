@@ -25,27 +25,20 @@ def main() -> None:
     match args.type:
 
         case 'static': 
-
             logger.info(' running word-embeddings analysis...')
             results = analyze_word_embeddings(models, logger)
             logger.info(' word-embeddings analysis done.\n')
-
-            for run, metrics in results.items():
-                logger.info(' ' + run)
-                for metric, (mean, std) in metrics.items():  
-                    logger.info(f' run[{run}] metric[{metric}]: {mean:.3f} ({std:.5f})')
+            pprint(results)
 
         case 'distributions': 
-
             logger.info(' running distributions analysis...')
             tokenizer = load_tokenizer(args)
             results = analyze_distributions(
-                models, 
-                tokenizer, 
-                logger,
+                models, tokenizer, logger,
+                n_samples=args.samples,
+                batch_size=args.batch_size,
             )
             logger.info(' distributions analysis done\n')
-
             pprint(results)
 
 def parse_args():
@@ -53,6 +46,8 @@ def parse_args():
     parser.add_argument('--type', type=str, required=True, choices=['static', 'distributions'])
     parser.add_argument('--runs', type=str, nargs='+', required=True)
     parser.add_argument('--device', type=str, choices=['cpu', 'cuda'], default='cuda')
+    parser.add_argument('--samples', type=int, default=1024)
+    parser.add_argument('--batch_size', type=int, default=32)
     return parser.parse_args()
 
 def load_tokenizer(args):

@@ -36,7 +36,7 @@ MANIFEST
 
 data
 plots
-
+wandb
 joblib
 
 # PyInstaller

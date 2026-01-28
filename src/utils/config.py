@@ -1,7 +1,7 @@
 from torch.multiprocessing import cpu_count
 from transformers import BertConfig, TrainingArguments 
 
-def get_training_args(seed: int, **args):
+def get_training_args(run_name: str, seed: int, **args):
     '''
     Wrapper for `transformers.TrainingArguments`.
 
@@ -27,18 +27,23 @@ def get_training_args(seed: int, **args):
         # use many workers for dl
         dataloader_num_workers=workers,
 
-        logging_strategy='epoch',
         eval_strategy='epoch',
 
         # lr
-        learning_rate=5e-4,
+        learning_rate=5e-4, # reduce lr if needed
 
-        # warmup
-        warmup_ratio=0.1,
+        warmup_ratio=0.01,
+        lr_scheduler_type="linear",
 
         # wandb
         report_to='wandb', # log to wandb
-        logging_steps=1,   # how often to log to wandb
+        run_name=run_name,
+        logging_strategy='steps',
+        logging_steps=500, # how often to log to wandb
+
+        max_grad_norm=1.0,
+
+        eval_on_start=False,
 
         # seeds (random model init but not data)
         seed=seed,
@@ -51,11 +56,11 @@ base = {
     'kmer': 6, # vocab size = 4**kmer + special tokens
 
     'epochs': 5,
-    'batch_size': 256,
+    'batch_size': 64,
     'max_length': 512,
-    'eval_size': 10_000,
-    'train_size': 1_000_000,
-    # 5 * 512 * 1M ~ 2.5b tokens
+    'eval_size':  10_000,
+    'train_size': 2_000_000,
+    # 5 * 512 * 2M ~ 5b tokens
 }
 
 _test = { # very small config for testing
@@ -65,10 +70,10 @@ _test = { # very small config for testing
     'batch_size': 16,
     'max_length': 512,
     'eval_size': 50,
-    'train_size': 200,
+    'train_size': 10000,
 }
 
-# base = _test; print('USING DUMMY TEST CONFIG') # uncomment for testing that everything works properly
+#base = _test; print('USING DUMMY TEST CONFIG') # uncomment for testing that everything works properly
 
 # the 3 functions below only change the size of the BERT model used.
 
@@ -79,7 +84,7 @@ def get_config_90M() -> dict:
     (This one simply returns the default BERT configuration as provided by HuggingFace.)
     '''
     config = base.copy()
-    config['bertconfig'] = BertConfig()
+    config['bertconfig'] = BertConfig(vocab_size=0) # setting vocab size to 0 because it will be updated by tokenizer
     return config
 
 def get_config_20M() -> dict:
@@ -90,6 +95,7 @@ def get_config_20M() -> dict:
         intermediate_size=1024,
         num_hidden_layers=8,
         num_attention_heads=8,
+        vocab_size=0,
     )
     return config
 
@@ -101,5 +107,6 @@ def get_config_4M() -> dict:
         intermediate_size=512,
         num_hidden_layers=6,
         num_attention_heads=8,
+        vocab_size=0,
     )
     return config
