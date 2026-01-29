@@ -14,11 +14,11 @@ After installing `uv`, you can directly run the commands below, it will install 
 
 ## Usage
 
-There are two main module in `src`, `train` and `analyze`. They should be ran as modules (with `-m`).
+There are two main module in `src`, `train` and `analyze`. They should be called as modules (with `-m`).
 
 ### Configuration
 
-The configuration of the models can be set in `src/utils/config.py` it defaults to the default HuggingFace BERT config (rougly ~90M params). 
+The configuration of the models can be set in `src/utils/config.py` it defaults to the default HuggingFace BERT config (rougly ~90M params) and 5b tokens for all models. 
 
 ### Training
 

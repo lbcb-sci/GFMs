@@ -4,10 +4,10 @@ from logging import Logger
 from tqdm import tqdm, trange
 from scipy.stats import entropy
 from torch.nn import functional as F
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 from transformers import BertForMaskedLM, PreTrainedTokenizer
 
-from .data import mlm_preprocess, get_dataset_dna, get_dataset_text, DeviceWrapper
+from src.analyze.data import mlm_preprocess, get_dataset_dna, get_dataset_text, DeviceWrapper
 from src.analyze import metrics as m
 from src.utils import cache
 
@@ -29,6 +29,7 @@ def analyze_distributions(
     data = {run: {} for run in models_dict.keys()}
 
     for run, models in models_dict.items():
+
         logger.info(f' run[{run}] n_models={len(models)}')
 
         is_text = 'text' in run
@@ -52,13 +53,13 @@ def analyze_distributions(
 
             encoded = dataset.map(preprocess, batched=True, remove_columns=remove)
             encoded.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
-        
-            logits = get_masked_logits(tuple(models), encoded, tokenizer, batch_size)
+            dataloader = DataLoader(DeviceWrapper(encoded, device=models[0].device), batch_size=batch_size)
+            logits = get_masked_logits(models, dataloader, tokenizer)
             cache.store(logits_file, logits)
 
-        perplexity = logits['perplexity']
-        accuracy = logits['accuracy']
-        logits = logits['logits']
+        perplexity = [m['perplexity'] for m in logits.values()]
+        accuracy = [m['accuracy'] for m in logits.values()]
+        logits = {i: m['logits'] for i, m in logits.items()}
 
         data[run] = compute_metrics(logits)
         data[run]['perplexity'] = perplexity
@@ -66,9 +67,11 @@ def analyze_distributions(
 
     return data
 
+TOP_P_VALUES = [0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+
 def compute_metrics(
     logits: dict[int, Tensor],
-    top_p_values: list[float] = numpy.linspace(0.05, 1.0, num=10),
+    top_p_values: list[float] = TOP_P_VALUES,
 ) -> dict:
     '''
     Analyze the output distributions (on masked tokens).
@@ -110,53 +113,51 @@ def compute_metrics(
 @torch.autograd.inference_mode()
 def get_masked_logits(
     models: tuple[BertForMaskedLM], 
-    dataset_encoded: Dataset, 
-    tokenizer: PreTrainedTokenizer,
-    batch_size: int,
-)-> dict[int, Tensor]:
+    dataloader: DataLoader, 
+    tokenizer: PreTrainedTokenizer
+)-> dict[int, dict[str, Tensor]]:
+    '''Extract masked token logits. Also computes perplexity and accuracy.'''
 
-    '''Extract masked token logits. Computes perplexity and accuracy at the same time.'''
-
-    dataloader = DataLoader(
-        DeviceWrapper(dataset_encoded, device=models[0].device), 
-        batch_size=batch_size, 
-        num_workers=0,
-    )
-
-    nll = correct_tokens = total_tokens = 0
-    logits = {}
+    logits = {}; results = {}
 
     for i, model in enumerate(models):
+        model.eval()
+
         logits_i = []
+        nll = correct_tokens = total_tokens = 0
 
-        for batch in tqdm(dataloader, desc=f'getting logits for model {i+1}/{len(models)}'):
-            logits_batch = model(**batch).logits
+        for batch in tqdm(dataloader, desc=f'model {i+1}/{len(models)}'):
+            with torch.enable_grad():
+                logits_batch = model(**batch).logits
+                labels = batch['labels']
+                mask = (
+                    (batch['input_ids'] == tokenizer.mask_token_id) & 
+                    (batch['input_ids'] != tokenizer.pad_token_id) & 
+                    batch['attention_mask'].bool()
+                )
 
-            labels = batch['labels']
+                masked_labels = labels[mask]
+                masked_logits = logits_batch[mask]
 
-            mask = (
-                (batch['input_ids'] == tokenizer.mask_token_id) & 
-                (batch['input_ids'] != tokenizer.pad_token_id)  & 
-                batch['attention_mask'].bool()
-            )
+                logits_i.append(masked_logits.detach())
 
-            masked_labels = labels[mask]
-            masked_logits = logits_batch[mask]
+                batch_nll = F.cross_entropy(masked_logits, masked_labels, reduction='mean')
+                preds = masked_logits.argmax(dim=-1)
+                correct_tokens += (preds == masked_labels).sum().item()
+                total_tokens += masked_labels.numel()
+                nll += batch_nll.item() * masked_labels.numel()
 
-            logits_i.append(masked_logits)
+        logits[i]  = torch.cat(logits_i, dim=0)
+        perplexity = torch.exp(torch.tensor(nll) / total_tokens).item()
+        accuracy   = correct_tokens / total_tokens
 
-            preds = masked_logits.argmax(dim=-1)
+        results[i] = {
+            'logits': logits[i],
+            'accuracy': accuracy,
+            'perplexity': perplexity,
+        }
 
-            correct_tokens += (preds == masked_labels).sum()
-            total_tokens += masked_labels.numel()
-            nll += F.cross_entropy(masked_logits, masked_labels, reduction='sum')
-
-        logits[i] = torch.cat(logits_i, dim=0)
-
-    perplexity = torch.exp(nll / total_tokens).item()
-    accuracy = (correct_tokens / total_tokens).item()
-
-    return {'logits': logits, 'perplexity': perplexity, 'accuracy': accuracy}
+    return results
 
 def top_p(probs: Tensor, p: float) -> Tensor:
     '''Reweight distribution to keep only the top-p% probability mass.'''

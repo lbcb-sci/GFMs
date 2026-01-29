@@ -1,4 +1,5 @@
 import torch 
+import numpy as np
 from torch import Tensor
 from functools import partial
 from ckatorch.core import cka_base
@@ -57,6 +58,8 @@ def compute_pairwise(data: Iterable, metric: Callable) -> Tensor:
 
     assert callable(metric)
 
+    if isinstance(data, dict): data = list(data.values())
+
     results = []
     for i, a in enumerate(data):
         for b in data[i+1:]: results.append(metric(a, b))
@@ -82,12 +85,15 @@ def std_per_token(cosims: Tensor) -> True:
     '''Return mean standard deviation of cosine similarities across models, per token.'''
 
     assert cosims.dim() == 3
-    return cosims.std(dim=0).mean(), torch.nan
+    return cosims.std(dim=0).mean().item(), torch.nan
 
 def meanstd(values: Iterable) -> tuple[float, float]:
     '''Wrapper for mean and std.'''
 
-    return torch.mean(values).item(), torch.std(values, unbiased=False).item()
+    if isinstance(values, Tensor):
+        return torch.mean(values).item(), torch.std(values, unbiased=False).item()
+    
+    return np.mean(values), np.std(values)
 
 def jensen_shannon(probs: Tensor) -> tuple[float, float]:
     '''Pairwise Jensen-Shannon distance.'''

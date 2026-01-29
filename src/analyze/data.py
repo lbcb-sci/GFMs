@@ -1,5 +1,3 @@
-'''Moved data related funcs here to make dynamic.py cleaner.'''
-
 import torch
 from datasets import load_dataset
 from torch.utils.data import Dataset
@@ -19,7 +17,7 @@ class DeviceWrapper(Dataset):
         return {k: (v.to(self.device) if torch.is_tensor(v) else v) for k, v in item.items()}
 
 def get_dataset(path: str, name: str, n: int) -> Dataset:
-    ## index from the end to get unseen samples
+    # we index from the end to get unseen-during-training samples
     dataset = load_dataset(path, name, split=f'train[-{n}:]')
     return dataset
 
@@ -40,6 +38,7 @@ def mlm_preprocess(batch, tokenizer: PreTrainedTokenizer, mask_prob: float):
     mask_arr = (rand < mask_prob) & (input_ids != tokenizer.pad_token_id)
 
     tokenized['input_ids'][mask_arr] = tokenizer.mask_token_id
+    mask_labels[~mask_arr] = -100
     tokenized['labels'] = mask_labels
 
     return tokenized

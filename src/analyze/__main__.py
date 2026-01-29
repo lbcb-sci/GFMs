@@ -1,15 +1,15 @@
 import os
-import torch
 import argparse
 from pathlib import Path
 from pprint import pprint
 from transformers import BertConfig, BertForMaskedLM, AutoTokenizer
 
 from src.utils import get_logger, count_parameters
-from .distributions import analyze_distributions
-from .static  import analyze_word_embeddings
 
-@torch.autograd.inference_mode()
+from src.analyze.distributions import analyze_distributions
+from src.analyze.static import analyze_word_embeddings
+from src.analyze.fisher import analyze_fisher
+
 def main() -> None:
     args = parse_args()
 
@@ -41,13 +41,24 @@ def main() -> None:
             logger.info(' distributions analysis done\n')
             pprint(results)
 
+        case 'fisher':
+            logger.info(' running fisher analysis...')
+            tokenizer = load_tokenizer(args)
+            results = analyze_fisher(
+                models, tokenizer, logger,
+                n_samples=args.samples,
+                batch_size=args.batch_size,
+            )
+            logger.info(' fisher analysis done\n')
+            pprint(results)
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Analyze the trained models.')
-    parser.add_argument('--type', type=str, required=True, choices=['static', 'distributions'])
+    parser.add_argument('--type', type=str, required=True, choices=['static', 'distributions', 'fisher'])
     parser.add_argument('--runs', type=str, nargs='+', required=True)
     parser.add_argument('--device', type=str, choices=['cpu', 'cuda'], default='cuda')
-    parser.add_argument('--samples', type=int, default=1024)
-    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--samples', type=int, default=256)
+    parser.add_argument('--batch_size', type=int, default=8)
     return parser.parse_args()
 
 def load_tokenizer(args):
