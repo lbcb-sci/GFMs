@@ -3,12 +3,14 @@ import argparse
 from pathlib import Path
 from pprint import pprint
 from transformers import BertConfig, BertForMaskedLM, AutoTokenizer
+import matplotlib.pyplot as plt
 
 from src.utils import get_logger, count_parameters
 
 from src.analyze.distributions import analyze_distributions
 from src.analyze.static import analyze_word_embeddings
 from src.analyze.fisher import analyze_fisher
+from src.analyze.attention import analyze_attention
 
 def main() -> None:
     args = parse_args()
@@ -50,11 +52,50 @@ def main() -> None:
                 batch_size=args.batch_size,
             )
             logger.info(' fisher analysis done\n')
+            #pprint(results)
+
+            for run in results.keys():
+
+                print(results[run]['encoder_dominance'])
+
+                max_layer = ''
+                maxval = float('-inf')
+                for layer, val in results[run]['fisher'][0].items(): 
+                    if val > maxval:
+                        max_layer = layer
+                        maxval = val
+
+                print(max_layer)
+                print(maxval)
+
+                fig, ax = plt.subplots(4, figsize=(30, 15))
+                for i, model in enumerate(results[run]['fisher'].values()):
+                    ax[i].bar(list(model.keys()), list(model.values()), color='red' if 'dna' in run else 'blue')
+                    ax[i].tick_params(axis='y', left=False, labelleft=False)
+                    ax[i].tick_params(rotation=45)
+                    if i < 3: ax[i].tick_params(axis='x', labelbottom=False)
+
+                fig.suptitle(run)
+
+                plt.tight_layout()
+                plt.savefig(f'{run}.png', dpi=400)
+                plt.close()
+
+        case 'attention':
+            logger.info(' running attention analysis...')
+            tokenizer = load_tokenizer(args)
+            results = analyze_attention(
+                models, tokenizer, logger,
+                n_samples=args.samples,
+                batch_size=args.batch_size,
+            )
+            logger.info(' attention analysis done\n')
             pprint(results)
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Analyze the trained models.')
-    parser.add_argument('--type', type=str, required=True, choices=['static', 'distributions', 'fisher'])
+    parser.add_argument('--type', type=str, required=True, 
+                        choices=['static', 'distributions', 'fisher', 'attention'])
     parser.add_argument('--runs', type=str, nargs='+', required=True)
     parser.add_argument('--device', type=str, choices=['cpu', 'cuda'], default='cuda')
     parser.add_argument('--samples', type=int, default=256)

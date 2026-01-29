@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 from tqdm import tqdm
 from torch import Tensor
 from logging import Logger
@@ -28,6 +27,7 @@ def analyze_fisher(
     data = {run: {} for run in models_dict.keys()}
 
     for run, models in models_dict.items():
+        models = [models[0]]
 
         logger.info(f' run[{run}] n_models={len(models)}')
 
@@ -36,7 +36,7 @@ def analyze_fisher(
         fisher_file = f'{run}_{n_samples}.fisher'
 
         if cache.cached(fisher_file): 
-            fisher = cache.get(fisher_file)
+            fisher_params = cache.get(fisher_file)
             logger.info(' fisher data retrieved from cache')
 
         else:
@@ -53,14 +53,12 @@ def analyze_fisher(
             encoded = dataset.map(preprocess, batched=True, remove_columns=remove)
             encoded.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
             dataloader = DataLoader(DeviceWrapper(encoded, device=models[0].device), batch_size=batch_size)
-            fisher = get_fisher(models, dataloader)
-            cache.store(fisher_file, fisher)
+            fisher_params = get_fisher_params(models, dataloader)
+            cache.store(fisher_file, fisher_params)
 
-        shared = metrics.compute_pairwise(fisher, fisher_cosine)
-        print(metrics.meanstd(shared))
-
-        data[run]['fisher'] = {model: reduce_fisher(x) for model, x in fisher.items()}
-        data[run]['encoder_dominance'] = encoder_dominance(fisher)
+        #shared = metrics.compute_pairwise(fisher, fisher_cosine)
+        data[run]['encoder_dominance'] = encoder_dominance(fisher_params)
+        data[run]['fisher'] = {model: reduce_fisher(x) for model, x in fisher_params.items()}
         for m in models: m.cpu()
 
     return data
@@ -91,7 +89,7 @@ def fisher_cosine(fisherA: dict[str, Tensor], fisherB: dict[str, Tensor]) -> flo
     return (top / bot).item()
 
 @torch.autograd.enable_grad()
-def get_fisher(
+def get_fisher_params(
     models: tuple[BertForMaskedLM],
     dataloader: DataLoader,
 ) -> dict[int, dict[str, Tensor]]:
@@ -108,7 +106,7 @@ def get_fisher(
     for i, model in enumerate(models):
         model.eval()
 
-        fisher = {n: torch.zeros_like(p) for n, p in model.named_parameters()}
+        fisher = {}
         total_tokens = 0
 
         for batch in tqdm(dataloader):
@@ -126,7 +124,10 @@ def get_fisher(
             ll.backward()
 
             for n, p in model.named_parameters():
+                if p.numel() < 10_000: continue
                 if p.grad is None: continue
+
+                if n not in fisher.keys(): fisher[n] = torch.zeros_like(p)
                 fisher[n] += p.grad.detach() ** 2
 
         for n in fisher: fisher[n] = (fisher[n] / total_tokens).cpu()
@@ -137,14 +138,9 @@ def get_fisher(
     return result
 
 def reduce_fisher(fisher: dict):
-    total_params = 0
-    for p in fisher.values(): total_params += p.numel()
-    total = 0.0
-    for x in fisher.values(): 
-        total += x.sum().item()
-
-    total /= torch.sqrt(torch.tensor(total_params))
-    return total
+    for layer, tensor in fisher.items():
+        fisher[layer] = tensor.mean().item()
+    return fisher
 
 def group_fisher(fisher: dict[str, Tensor]):
     result = {'embeddings': [], 'encoder': [], 'head': []}
