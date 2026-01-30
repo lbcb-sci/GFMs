@@ -61,7 +61,7 @@ def train(type: str, **args) -> None:
         return tokenizer(
             cleaned,
             truncation=True,
-            padding="max_length",
+            #padding="max_length",
             max_length=args["max_length"],
         )
 
@@ -71,18 +71,17 @@ def train(type: str, **args) -> None:
 
     train_encoded = dataset_train.map(preprocess, batched=True, remove_columns=remove)
     eval_encoded  = dataset_eval.map(preprocess,  batched=True, remove_columns=remove)
-    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=True)
 
     logger.info(' preprocessing dataset done.')
     logger.info(' calling main train function...')
 
     args.pop('bertconfig')
 
-    return _train(bertconfig, data_collator, train_encoded, eval_encoded, type, **args)
+    return _train(bertconfig, tokenizer, train_encoded, eval_encoded, type, **args)
 
 def _train(
     bertconfig: BertConfig, 
-    collator: DataCollatorForLanguageModeling, 
+    tokenizer, 
     train_dataset: Dataset, 
     eval_dataset: Dataset, 
     prefix: str, 
@@ -97,16 +96,21 @@ def _train(
     save_path = get_run_path(prefix, args['tokenizer_name'])
 
     for seed in range(1, N+1):
+        # making sure model gets different initialization every time!
+        set_seed(seed); random.seed(seed); numpy.random.seed(seed)
+        torch.manual_seed(seed); torch.cuda.manual_seed_all(seed)
+
+        collator = DataCollatorForLanguageModeling(
+            tokenizer=tokenizer, 
+            mlm=True, 
+            mlm_probability=0.15,
+        )
 
         training_args = get_training_args(
             run_name=f'{str(save_path).split('/')[-1]}/{seed}', 
             seed=seed, 
             **args,
         )
-
-        # making sure model gets different initialization every time!
-        set_seed(seed); random.seed(seed); numpy.random.seed(seed)
-        torch.manual_seed(seed); torch.cuda.manual_seed_all(seed)
 
         model = BertForMaskedLM(bertconfig)
 
