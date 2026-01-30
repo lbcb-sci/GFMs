@@ -8,7 +8,7 @@ def get_training_args(run_name: str, seed: int, **args):
     Applies args and ensures random model initialization but deterministic data.
     '''
 
-    workers = min(cpu_count() // 2, args['batch_size'])
+    workers = min(16, args['batch_size'])
 
     return TrainingArguments(
         # batch size
