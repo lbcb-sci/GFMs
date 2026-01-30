@@ -112,27 +112,32 @@ def get_fisher_params(
         for batch in tqdm(dataloader):
             outputs = model(**batch)
             logits = outputs.logits
+            labels = batch['labels']
 
-            mask = batch['labels'] != -100
+            mask = labels != -100
             num_masked = mask.sum().item()
             total_tokens += num_masked
 
-            masked_labels = batch['labels'][mask]
+            masked_labels = labels[mask]
             ll = F.cross_entropy(logits[mask], masked_labels, reduction='sum')
 
             model.zero_grad(set_to_none=True)
             ll.backward()
 
             for n, p in model.named_parameters():
-                if p.numel() < 10_000: continue
-                if p.grad is None: continue
+                if p.grad is None or p.numel() < 10_000:
+                    continue
 
-                if n not in fisher.keys(): fisher[n] = torch.zeros_like(p)
+                if n not in fisher.keys():
+                    fisher[n] = torch.zeros_like(p)
+
                 fisher[n] += p.grad.detach() ** 2
 
-        for n in fisher: fisher[n] = (fisher[n] / total_tokens).cpu()
+        for n in fisher:
+            fisher[n] = (fisher[n] / total_tokens).cpu()
 
         result[i] = fisher
+
         model.cpu()
 
     return result

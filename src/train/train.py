@@ -109,7 +109,6 @@ def _train(
         torch.manual_seed(seed); torch.cuda.manual_seed_all(seed)
 
         model = BertForMaskedLM(bertconfig)
-        logger.info(f' model device: {next(model.parameters()).device}')
 
         nparams = count_parameters(model)
         args['n_params'] = nparams

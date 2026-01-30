@@ -15,6 +15,8 @@ def get_training_args(run_name: str, seed: int, **args):
         per_device_train_batch_size=args['batch_size'],
         per_device_eval_batch_size=args['batch_size'],
 
+        use_cpu=False,
+
         # epochs
         num_train_epochs=args['epochs'],
 
@@ -22,18 +24,25 @@ def get_training_args(run_name: str, seed: int, **args):
         metric_for_best_model='eval_loss',
         load_best_model_at_end=True, # load the best model (to be saved) at the end
         greater_is_better=False,
-        save_strategy='epoch', # save model at the end of each epoch
 
         # use many workers for dl
         dataloader_num_workers=workers,
 
-        eval_strategy='epoch',
+        save_strategy='steps',
+        eval_strategy='steps',
+        save_steps=5_000,
+        eval_steps=5_000,
+
+        fp16=False,
+        bf16=False,
+
+        label_smoothing_factor=0.0,
 
         # lr
-        learning_rate=5e-4, # reduce lr if needed
+        learning_rate=1e-4,
 
-        warmup_ratio=0.01,
-        lr_scheduler_type="linear",
+        warmup_ratio=0.1,
+        lr_scheduler_type='cosine',
 
         # wandb
         report_to='wandb', # log to wandb
@@ -41,7 +50,7 @@ def get_training_args(run_name: str, seed: int, **args):
         logging_strategy='steps',
         logging_steps=100, # how often to log to wandb
 
-        max_grad_norm=1.0,
+        max_grad_norm=0.5,
 
         eval_on_start=False,
 

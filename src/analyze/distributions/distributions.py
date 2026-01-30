@@ -127,25 +127,25 @@ def get_masked_logits(
         nll = correct_tokens = total_tokens = 0
 
         for batch in tqdm(dataloader, desc=f'model {i+1}/{len(models)}'):
-            with torch.enable_grad():
-                logits_batch = model(**batch).logits
-                labels = batch['labels']
-                mask = (
-                    (batch['input_ids'] == tokenizer.mask_token_id) & 
-                    (batch['input_ids'] != tokenizer.pad_token_id) & 
-                    batch['attention_mask'].bool()
-                )
 
-                masked_labels = labels[mask]
-                masked_logits = logits_batch[mask]
+            logits_batch = model(**batch).logits
+            labels = batch['labels']
+            mask = (
+                (batch['input_ids'] == tokenizer.mask_token_id) & 
+                (batch['input_ids'] != tokenizer.pad_token_id) & 
+                batch['attention_mask'].bool()
+            )
 
-                logits_i.append(masked_logits.detach())
+            masked_labels = labels[mask]
+            masked_logits = logits_batch[mask]
 
-                batch_nll = F.cross_entropy(masked_logits, masked_labels, reduction='mean')
-                preds = masked_logits.argmax(dim=-1)
-                correct_tokens += (preds == masked_labels).sum().item()
-                total_tokens += masked_labels.numel()
-                nll += batch_nll.item() * masked_labels.numel()
+            logits_i.append(masked_logits.detach())
+
+            batch_nll = F.cross_entropy(masked_logits, masked_labels, reduction='mean')
+            preds = masked_logits.argmax(dim=-1)
+            correct_tokens += (preds == masked_labels).sum().item()
+            total_tokens += masked_labels.numel()
+            nll += batch_nll.item() * masked_labels.numel()
 
         logits[i]  = torch.cat(logits_i, dim=0)
         perplexity = torch.exp(torch.tensor(nll) / total_tokens).item()
