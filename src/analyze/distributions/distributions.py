@@ -1,177 +1,164 @@
-import numpy, torch
+import torch
+import numpy as np
+from tqdm import tqdm
 from torch import Tensor
 from logging import Logger
-from tqdm import tqdm, trange
-from scipy.stats import entropy
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
+from scipy.spatial.distance import jensenshannon
 from transformers import BertForMaskedLM, PreTrainedTokenizer
-
 from src.analyze.data import mlm_preprocess, get_dataset_dna, get_dataset_text, DeviceWrapper
-from src.analyze import metrics as m
-from src.utils import cache
 
 def analyze_distributions(
     models_dict: dict, 
-    tokenizer: PreTrainedTokenizer, 
+    tokenizers: list[PreTrainedTokenizer], 
     logger: Logger,
-    n_samples: int,
-    batch_size: int,
-    p_mask: float = 0.15,
-) -> dict:
-    '''Analyze the token distributions of BERT models over masked tokens.'''
+    n_samples: int, batch_size: int) -> dict:
 
-    preprocess = lambda batch: mlm_preprocess(batch, tokenizer, mask_prob=p_mask)
+    '''Analyze the distributions of models over masked tokens.'''
 
-    logger.info(f' computing metrics on distributions')
-    logger.info(f' tokenizer: {type(tokenizer)} from {tokenizer.name_or_path}')
+    logger.info(f' computing metrics on distributions...')
 
     data = {run: {} for run in models_dict.keys()}
 
-    for run, models in models_dict.items():
+    for (run, models), tokenizer in zip(models_dict.items(), tokenizers):
+
+        assert run in tokenizer.name_or_path
 
         logger.info(f' run[{run}] n_models={len(models)}')
-
+        logger.info(f' tokenizer: {type(tokenizer)} from {tokenizer.name_or_path}')
         is_text = 'text' in run
 
-        logits_file = f'{run}_{n_samples}.logits'
+        logger.info(f' collecting dataset {"text" if is_text else "dna"}...')
+        dataset = get_dataset_text(n_samples) if is_text else get_dataset_dna(n_samples)
+        remove = ['text', 'url', 'id', 'title'] if is_text else ['text']
 
-        if cache.cached(logits_file): 
-            logits = cache.get(logits_file)
-            logger.info(' logits retrieved from cache')
+        logger.info( 'masking tokens in dataset...')
+        preprocess = lambda batch: mlm_preprocess(batch, tokenizer, mask_prob=0.05)
+        encoded = dataset.map(preprocess, batched=True, remove_columns=remove, load_from_cache_file=False)
+        encoded.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
 
-        else:
+        dataloader = DataLoader(
+            DeviceWrapper(encoded, device=models[0].device),
+            batch_size=batch_size,
+            shuffle=False,
+        )
 
-            if is_text:
-                logger.info(f' collecting dataset text...')
-                dataset = get_dataset_text(n=n_samples)
-                remove = ['text', 'url', 'id', 'title']
-            else:
-                logger.info(f' collecting dataset dna...')
-                dataset = get_dataset_dna(n=n_samples)
-                remove = ['text']
+        distributions = get_distributions(models, dataloader)
+        assert (distributions.sum(dim=-1) - 1 < 1e-6).all()
 
-            encoded = dataset.map(preprocess, batched=True, remove_columns=remove)
-            encoded.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
-            dataloader = DataLoader(DeviceWrapper(encoded, device=models[0].device), batch_size=batch_size)
-            logits = get_masked_logits(models, dataloader, tokenizer)
-            cache.store(logits_file, logits)
+        mean_dist = compute_mean_distribution(distributions)
+        data[run]['mean_dist'] = mean_dist.cpu()
 
-        perplexity = [m['perplexity'] for m in logits.values()]
-        accuracy = [m['accuracy'] for m in logits.values()]
-        logits = {i: m['logits'] for i, m in logits.items()}
-
-        data[run] = compute_metrics(logits)
-        data[run]['perplexity'] = perplexity
-        data[run]['accuracy'] = accuracy
+        jensen_shannon = compute_jensen_shannon(distributions)
+        data[run]['js'] = jensen_shannon
 
     return data
 
-TOP_P_VALUES = [0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+def compute_mean_distribution(distributions: dict[int, Tensor]) -> Tensor:
+    sorted_dists, _ = torch.sort(distributions, dim=-1, descending=True)
+    mean_sorted_dist = sorted_dists.mean(axis=(0, 1))
+    return mean_sorted_dist
 
-def compute_metrics(
-    logits: dict[int, Tensor],
-    top_p_values: list[float] = TOP_P_VALUES,
-) -> dict:
-    '''
-    Analyze the output distributions (on masked tokens).
-    
-    Computes: 
-        - Mean output distribution.
-        - Top-p Jensen-Shannon distance between models for different values of p.
-        - KL divergence between models and the uniform distribution.
-    '''
+def compute_jensen_shannon(
+    distributions: dict[int, Tensor],
+    top_p_values: list[float] = [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+) -> dict[float, float]:
+    desc = f'computing jensen-shannon for {len(top_p_values)} p-values'
 
-    kl_uniform = []
-    jensen_shannon = {p: [] for p in top_p_values}
-    n_tokens, vocab_size = logits[0].shape
-    mean_dist = torch.zeros(vocab_size)
-    uniform = torch.ones(vocab_size) / vocab_size
+    total_values = 0
+    total_nan_values = 0
 
-    for i in trange(0, n_tokens, 1, desc='computing metrics on logits'):
+    result = {}
+    for p in tqdm(top_p_values, desc=desc):
 
-        # get probability distributions
-        logits_token = torch.stack([logits[model][i] for model in logits.keys()])
-        probs = F.softmax(logits_token, dim=1).cpu()
+        total = jensen_shannon_p = 0
+        dists_top_p = top_p_reweight(distributions, p).cpu()
 
-        # sort token proabilities
-        sorted_probs, _ = torch.sort(probs, descending=True)
-        mean_dist += sorted_probs.mean(dim=0)
+        for i, a in enumerate(dists_top_p):
+            for b in dists_top_p[i+1:]:
+                js = jensenshannon(a, b, base=2, axis=1)
 
-        # KL(model, uniform)
-        kl_uniform.append(entropy(pk=probs, qk=uniform, base=2, axis=1).mean())
+                nan = np.isnan(js)
+                total_nan_values += nan.sum()
+                total_values += nan.size
 
-        # Jensen-Shannon
-        for p in top_p_values: jensen_shannon[p].append(m.jensen_shannon(top_p(probs, p)))
+                js[nan] = np.nanmean(js)
+                jensen_shannon_p += js.mean()
 
-    for k, v in jensen_shannon.items(): jensen_shannon[k] = numpy.mean(v)
-    kl_uniform = numpy.mean(kl_uniform)
-    mean_dist = (mean_dist / n_tokens)
+                total += 1
 
-    return {'jensen_shannon': jensen_shannon, 'kl_uniform': kl_uniform, 'mean_dist': mean_dist}
+        result[p] = float(jensen_shannon_p / total)
+
+    print(f'<js>: there was {total_nan_values:,} / {total_values:,} nan values set to np.nanmean')
+    return result
 
 @torch.autograd.inference_mode()
-def get_masked_logits(
+def get_distributions(
     models: tuple[BertForMaskedLM], 
     dataloader: DataLoader, 
-    tokenizer: PreTrainedTokenizer
-)-> dict[int, dict[str, Tensor]]:
-    '''Extract masked token logits. Also computes perplexity and accuracy.'''
+)-> Tensor:
+    '''
+    Extract distributions over masked tokens.
+    
+    Also computes perplexity and accuracy.
 
-    logits = {}; results = {}
+    Returns tensor of [models x total_masked_tokens x vocab_size].
+    '''
+
+    result = []
 
     for i, model in enumerate(models):
-        model.eval()
 
-        logits_i = []
-        nll = correct_tokens = total_tokens = 0
+        total_correct_predictions = 0
+        total_masked_tokens = 0
 
-        for batch in tqdm(dataloader, desc=f'model {i+1}/{len(models)}'):
+        dists_model = []
 
-            logits_batch = model(**batch).logits
+        for batch in tqdm(dataloader):
             labels = batch['labels']
-            mask = (
-                (batch['input_ids'] == tokenizer.mask_token_id) & 
-                (batch['input_ids'] != tokenizer.pad_token_id) & 
-                batch['attention_mask'].bool()
-            )
 
-            masked_labels = labels[mask]
-            masked_logits = logits_batch[mask]
+            mask = (labels != -100)
+            labels = labels[mask]
 
-            logits_i.append(masked_logits.detach())
+            num_masked_tokens = labels.numel()
+            total_masked_tokens += num_masked_tokens
 
-            batch_nll = F.cross_entropy(masked_logits, masked_labels, reduction='mean')
-            preds = masked_logits.argmax(dim=-1)
-            correct_tokens += (preds == masked_labels).sum().item()
-            total_tokens += masked_labels.numel()
-            nll += batch_nll.item() * masked_labels.numel()
+            logits = model(**batch).logits[mask]
+            assert logits.shape[0] == num_masked_tokens
 
-        logits[i]  = torch.cat(logits_i, dim=0)
-        perplexity = torch.exp(torch.tensor(nll) / total_tokens).item()
-        accuracy   = correct_tokens / total_tokens
+            distributions = F.softmax(logits, dim=1)
+            assert (distributions.sum(dim=1) - 1 < 1e-6).all()
 
-        results[i] = {
-            'logits': logits[i],
-            'accuracy': accuracy,
-            'perplexity': perplexity,
-        }
+            dists_model.extend(distributions)
 
-    return results
+            total_correct_predictions += (distributions.argmax(-1) == labels).float().sum()
 
-def top_p(probs: Tensor, p: float) -> Tensor:
-    '''Reweight distribution to keep only the top-p% probability mass.'''
+        dists_model = torch.stack(dists_model)
+        assert dists_model.shape[0] == total_masked_tokens
 
-    assert torch.allclose(probs.sum(dim=-1), torch.ones(1, device=probs.device)) 
+        result.append(dists_model)
+
+        model_accuracy = (total_correct_predictions / total_masked_tokens).item()
+        print(f'model {i} accuracy = {model_accuracy*100:.2f}%')
+
+    return torch.stack(result)
+
+def top_p_reweight(distributions: Tensor, p: float) -> Tensor:
+    '''Reweight distributions to keep only the top-p% probability mass.'''
+
+    assert torch.allclose(distributions.sum(dim=-1), torch.ones(1, device=distributions.device)) 
     # should be already softmax-ed and sum to 1
 
-    sorted_probs, sorted_idx = torch.sort(probs, dim=1, descending=True)
-    cum_probs = torch.cumsum(sorted_probs, dim=1)
+    sorted_probs, sorted_idx = torch.sort(distributions, dim=-1, descending=True)
+    cum_probs = torch.cumsum(sorted_probs, dim=-1)
 
     mask = cum_probs > p
-    mask[:, 0] = False # at least one token
+    mask[:, :, 0] = False # at least one token
 
     sorted_probs[mask] = 0.0
-    sorted_probs = sorted_probs / sorted_probs.sum(dim=1, keepdim=True)
 
-    return torch.zeros_like(probs).scatter_(1, sorted_idx, sorted_probs)
+    total = sorted_probs.sum(dim=-1, keepdim=True)
+    sorted_probs = sorted_probs / torch.clamp(total, min=1e-8)
+
+    return torch.zeros_like(distributions).scatter_(-1, sorted_idx, sorted_probs)

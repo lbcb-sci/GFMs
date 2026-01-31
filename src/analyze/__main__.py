@@ -3,14 +3,14 @@ import argparse
 from pathlib import Path
 from pprint import pprint
 from transformers import BertConfig, BertForMaskedLM, AutoTokenizer
-import matplotlib.pyplot as plt
 
 from src.utils import get_logger, count_parameters
-
 from src.analyze.distributions import analyze_distributions
 from src.analyze.static import analyze_word_embeddings
 from src.analyze.fisher import analyze_fisher
 from src.analyze.attention import analyze_attention
+
+from .plotting import plot_jensen_shannon, plot_average_distribution
 
 def main() -> None:
     args = parse_args()
@@ -32,82 +32,47 @@ def main() -> None:
             logger.info(' word-embeddings analysis done.\n')
             pprint(results)
 
-        case 'distributions': 
+        case 'distribution': 
             logger.info(' running distributions analysis...')
-            tokenizer = load_tokenizer(args)
+            tokenizers = load_tokenizers(args)
             results = analyze_distributions(
-                models, tokenizer, logger,
+                models, tokenizers, logger,
                 n_samples=args.samples,
                 batch_size=args.batch_size,
             )
             logger.info(' distributions analysis done\n')
             pprint(results)
 
-        case 'fisher':
-            logger.info(' running fisher analysis...')
-            tokenizer = load_tokenizer(args)
-            results = analyze_fisher(
-                models, tokenizer, logger,
-                n_samples=args.samples,
-                batch_size=args.batch_size,
-            )
-            logger.info(' fisher analysis done\n')
-            #pprint(results)
+            text_js = results['90M_text_bpe']['js']
+            dna_js  = results['90M_dna_bpe']['js']
+            plot_jensen_shannon(text_js, dna_js)
 
-            for run in results.keys():
+            n_text = 10
+            n_dna = 50
 
-                print(results[run]['encoder_dominance'])
+            text_mean_dist = results['90M_text_bpe']['mean_dist'][:n_text]
+            dna_mean_dist = results['90M_dna_bpe']['mean_dist'][:n_dna]
 
-                max_layer = ''
-                maxval = float('-inf')
-                for layer, val in results[run]['fisher'][0].items(): 
-                    if val > maxval:
-                        max_layer = layer
-                        maxval = val
-
-                print(max_layer)
-                print(maxval)
-
-                fig, ax = plt.subplots(4, figsize=(30, 15))
-                for i, model in enumerate(results[run]['fisher'].values()):
-                    ax[i].bar(list(model.keys()), list(model.values()), color='red' if 'dna' in run else 'blue')
-                    ax[i].tick_params(axis='y', left=False, labelleft=False)
-                    ax[i].tick_params(rotation=45)
-                    if i < 3: ax[i].tick_params(axis='x', labelbottom=False)
-
-                fig.suptitle(run)
-
-                plt.tight_layout()
-                plt.savefig(f'{run}.png', dpi=400)
-                plt.close()
-
-        case 'attention':
-            logger.info(' running attention analysis...')
-            tokenizer = load_tokenizer(args)
-            results = analyze_attention(
-                models, tokenizer, logger,
-                n_samples=args.samples,
-                batch_size=args.batch_size,
-            )
-            logger.info(' attention analysis done\n')
-            pprint(results)
+            plot_average_distribution(text_mean_dist, dna_mean_dist)
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Analyze the trained models.')
     parser.add_argument('--type', type=str, required=True, 
-                        choices=['static', 'distributions', 'fisher', 'attention'])
+                        choices=['static', 'distribution', 'fisher', 'attention', 'hidden'])
     parser.add_argument('--runs', type=str, nargs='+', required=True)
     parser.add_argument('--device', type=str, choices=['cpu', 'cuda'], default='cuda')
     parser.add_argument('--samples', type=int, default=256)
     parser.add_argument('--batch_size', type=int, default=8)
     return parser.parse_args()
 
-def load_tokenizer(args):
-    run = Path(args.runs[0])
-    tokenizers = os.listdir(run)
-    path = run / tokenizers[0]
-    tokenizer = AutoTokenizer.from_pretrained(path, local_files_only=True)
-    return tokenizer
+def load_tokenizers(args):
+    tokenizers = []
+    for run in args.runs:
+        run = Path(run)
+        path = run / os.listdir(run)[0]
+        tokenizer = AutoTokenizer.from_pretrained(path, local_files_only=True)
+        tokenizers.append(tokenizer)
+    return tokenizers
 
 def load_models(args) -> dict:
     logger = args.logger
@@ -128,8 +93,9 @@ def load_models(args) -> dict:
 
             config = BertConfig.from_pretrained(model_path, local_files_only=True)
             config.output_attentions = True # output attention scores
+            config.output_hidden_states = True # output hidden states
 
-            model = BertForMaskedLM.from_pretrained(model_path, config=config, device_map=device)
+            model = BertForMaskedLM.from_pretrained(model_path, config=config, device_map=device).eval()
 
             logger.info(f' model [{model_path}] has {count_parameters(model):,} parameters')
             models[run].append(model)

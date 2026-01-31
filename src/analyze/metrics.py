@@ -7,10 +7,10 @@ from torch.nn import functional as F
 from typing import Callable, Iterable
 from scipy.spatial.distance import jensenshannon 
 
-def cosine_similarity(A: Tensor, B: Tensor) -> Tensor:
+def cosine_similarity(A: Tensor, B: Tensor, dim: int = -1) -> Tensor:
     '''Compute all-tokens cosine similarity between two embeddings matrices.'''
 
-    return F.normalize(A) @ F.normalize(B).T
+    return F.normalize(A, dim=dim) @ F.normalize(B, dim=dim).T
 
 def jaccard(A: list, B: list):
     '''Jaccard index = inter / union of 2 sets.'''
@@ -98,4 +98,4 @@ def meanstd(values: Iterable) -> tuple[float, float]:
 def jensen_shannon(probs: Tensor) -> tuple[float, float]:
     '''Pairwise Jensen-Shannon distance.'''
 
-    return meanstd(compute_pairwise(probs.cpu(), partial(jensenshannon, base=2)))
+    return compute_pairwise(probs.cpu(), partial(jensenshannon, base=2, axis=0))

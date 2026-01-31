@@ -5,8 +5,11 @@ from logging import Logger
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from transformers import BertForMaskedLM, PreTrainedTokenizer
+from scipy.spatial.distance import jensenshannon
 
 from src.analyze.data import DeviceWrapper, mlm_preprocess, get_dataset_dna, get_dataset_text
+from src.analyze import metrics as m
+from src.analyze.distributions import top_p_reweight
 from src.utils import cache
 
 def analyze_attention(
@@ -28,6 +31,8 @@ def analyze_attention(
 
     for run, models in models_dict.items():
 
+        device = next(models[0].parameters()).device
+
         logger.info(f' run[{run}] n_models={len(models)}')
 
         is_text = 'text' in run
@@ -35,7 +40,7 @@ def analyze_attention(
         attn_file = f'{run}_{n_samples}.attn'
 
         if cache.cached(attn_file): 
-            logits = cache.get(attn_file)
+            attn_models = cache.get(attn_file)
             logger.info(' attention scores retrieved from cache')
 
         else:
@@ -51,45 +56,92 @@ def analyze_attention(
 
             encoded = dataset.map(preprocess, batched=True, remove_columns=remove)
             encoded.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
-            dataloader = DataLoader(DeviceWrapper(encoded, device=models[0].device), batch_size=batch_size)
+            dataloader = DataLoader(DeviceWrapper(encoded, device=device), batch_size=batch_size)
 
-            cache.store(logits_file, logits)
+            attn_models = get_attention_scores(models, dataloader)
+            cache.store(attn_file, attn_models)
 
-        perplexity = [m['perplexity'] for m in logits.values()]
-        accuracy = [m['accuracy'] for m in logits.values()]
-        logits = {i: m['logits'] for i, m in logits.items()}
+        ps: list = [0.05, 0.1, 0.2, 0.5, 0.9, 1.0]
+        scores_all = {p: torch.zeros((12, 12)) for p in ps}
 
-        data[run] = compute_metrics(logits)
-        data[run]['perplexity'] = perplexity
-        data[run]['accuracy'] = accuracy
+        total = 0
+
+        for a in range(len(models)):
+            for b in range(len(models))[a+1:]:
+                print(a, b)
+                scores = compare_models_attn(attn_models[a], attn_models[b], device, ps=ps)
+                for p in ps: scores_all[p] += scores[p]
+                total += 1
+        
+        for p in ps:
+            scores_all[p] /= total
+            scores_all[p] = (scores_all[p] + scores_all[p].T) / 2 
+
+        data[run] = scores_all
 
     return data
+
+def compare_models_attn(attnA, attnB, device, ps):
+    scores_all = {p: torch.empty((12, 12)) for p in ps}
+
+    for lA in attnA:
+        for lB in attnB:
+
+            layerA = attnA[lA]
+            layerB = attnB[lB]
+
+            a = torch.cat([layerA[head] for head in layerA], dim=0).to(device)
+            b = torch.cat([layerB[head] for head in layerB], dim=0).to(device)
+
+            for p in ps:
+
+                a_top_p = top_p_reweight(a, p=p)
+                b_top_p = top_p_reweight(b, p=p)
+
+                a_unit = F.normalize(a_top_p, dim=1)
+                b_unit = F.normalize(b_top_p, dim=1)
+
+                score = (a_unit * b_unit).sum(dim=1).clamp(min=0.0).mean()
+
+                scores_all[p][lA, lB] = score.item()
+
+    return scores_all
 
 @torch.autograd.inference_mode()
 def get_attention_scores(
     models: tuple[BertForMaskedLM], 
     dataloader: DataLoader, 
 )-> dict[int, dict[str, Tensor]]:
-    '''Extract masked token logits. Also computes perplexity and accuracy.'''
+    '''
+    Extract attention scores.
+
+    Returns a dict of [models, layers, heads].
+    '''
 
     attn = {}
     for i, model in enumerate(models):
         model.eval()
-        attn_model = []
 
+        attn_model = {}
         for batch in tqdm(dataloader, desc=f'model {i+1}/{len(models)}'):
-            attention_batch = model(**batch).attentions
-            print(attention_batch)
-            exit()
 
-            labels = batch['labels']
-            mask = batch['labels'] != -100
+            for layer, attn_layer in enumerate(model(**batch).attentions):
+                if layer not in attn_model.keys(): attn_model[layer] = {}
 
-            masked_labels = labels[mask]
-            masked_attn = attention_batch[mask]
+                for head, attn_head in enumerate(attn_layer[0]):
 
-            attn_model.append(masked_attn.detach())
+                    if head not in attn_model[layer].keys(): attn_model[layer][head] = []
+
+                    labels = batch['labels']
+                    mask = (labels != -100)[0]
+                    masked_attn = attn_head[mask]
+                    attn_model[layer][head].append(masked_attn.detach())
+
+        for layer in range(model.config.num_hidden_layers):
+            for head in range(model.config.num_attention_heads):
+                attn_model[layer][head] = torch.cat(attn_model[layer][head]).cpu()
 
         attn[i] = attn_model
+        model.cpu()
 
     return attn
