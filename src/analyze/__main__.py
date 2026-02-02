@@ -4,13 +4,12 @@ from pathlib import Path
 from pprint import pprint
 from transformers import BertConfig, BertForMaskedLM, AutoTokenizer
 
-from src.utils import get_logger, count_parameters
 from src.analyze.distributions import analyze_distributions
-from src.analyze.static import analyze_word_embeddings
-from src.analyze.fisher import analyze_fisher
-from src.analyze.attention import analyze_attention
+from src.analyze.static        import analyze_word_embeddings
+from src.analyze.fisher        import analyze_fisher
 
-from .plotting import plot_jensen_shannon, plot_average_distribution
+from src.utils import get_logger, count_parameters
+from .plotting import *
 
 def main() -> None:
     args = parse_args()
@@ -27,19 +26,45 @@ def main() -> None:
     match args.type:
 
         case 'static': 
+
             logger.info(' running word-embeddings analysis...')
             results = analyze_word_embeddings(models, logger)
             logger.info(' word-embeddings analysis done.\n')
             pprint(results)
 
+        case 'fisher': 
+
+            logger.info(' running fisher information analysis...')
+            tokenizers = load_tokenizers(args)
+            results = analyze_fisher(models, tokenizers, args)
+            logger.info(' fisher information analysis done.\n')
+            pprint(results)
+
+            import numpy as np
+
+            xlabels = []
+            for l in list(results['90M_text_bpe'].keys()):
+                if 'embeddings' in l: xlabels.append(l)
+            for l in list(results['90M_text_bpe'].keys()):
+                if 'encoder' in l: xlabels.append(l)
+            for l in list(results['90M_text_bpe'].keys()):
+                if 'head' in l: xlabels.append(l)
+
+            scale = 1_000_000_000
+
+            y_text = np.array([results['90M_text_bpe'][l] for l in xlabels]) * scale
+            y_dna = np.array([results['90M_dna_bpe'][l] for l in xlabels]) * scale
+
+            y_text /= y_text.sum()
+            y_dna /= y_dna.sum()
+
+            plot_fisher_information(xlabels, y_text, y_dna)
+
         case 'distribution': 
+
             logger.info(' running distributions analysis...')
             tokenizers = load_tokenizers(args)
-            results = analyze_distributions(
-                models, tokenizers, logger,
-                n_samples=args.samples,
-                batch_size=args.batch_size,
-            )
+            results = analyze_distributions(models, tokenizers, args)
             logger.info(' distributions analysis done\n')
             pprint(results)
 
@@ -52,7 +77,6 @@ def main() -> None:
 
             text_mean_dist = results['90M_text_bpe']['mean_dist'][:n_text]
             dna_mean_dist = results['90M_dna_bpe']['mean_dist'][:n_dna]
-
             plot_average_distribution(text_mean_dist, dna_mean_dist)
 
 def parse_args():

@@ -8,18 +8,23 @@ from torch.utils.data import DataLoader
 from scipy.spatial.distance import jensenshannon
 from transformers import BertForMaskedLM, PreTrainedTokenizer
 from src.analyze.data import mlm_preprocess, get_dataset_dna, get_dataset_text, DeviceWrapper
+from scipy.stats import entropy
 
 def analyze_distributions(
     models_dict: dict, 
     tokenizers: list[PreTrainedTokenizer], 
-    logger: Logger,
-    n_samples: int, batch_size: int) -> dict:
+    args,
+) -> dict:
 
     '''Analyze the distributions of models over masked tokens.'''
 
+    logger = args.logger
+    n_samples = args.samples
+    batch_size = args.batch_size
+
     logger.info(f' computing metrics on distributions...')
 
-    data = {run: {} for run in models_dict.keys()}
+    data = {run: {} for run in models_dict}
 
     for (run, models), tokenizer in zip(models_dict.items(), tokenizers):
 
@@ -50,8 +55,8 @@ def analyze_distributions(
         mean_dist = compute_mean_distribution(distributions)
         data[run]['mean_dist'] = mean_dist.cpu()
 
-        jensen_shannon = compute_jensen_shannon(distributions)
-        data[run]['js'] = jensen_shannon
+        #jensen_shannon = compute_jensen_shannon(distributions)
+        #data[run]['js'] = jensen_shannon
 
     return data
 
@@ -93,6 +98,12 @@ def compute_jensen_shannon(
     print(f'<js>: there was {total_nan_values:,} / {total_values:,} nan values set to np.nanmean')
     return result
 
+def kl_divergence(p: Tensor, q: Tensor) -> Tensor:
+    '''KL for p, q of shape [N x vocab_size].'''
+    p = p.clamp_min(1e-10); q = q.clamp_min(1e-10)
+    assert (p.sum(dim=-1) - 1 < 1e-6).all() and (q.sum(dim=-1) - 1 < 1e-6).all()
+    return (p * (torch.log2(p) - torch.log2(q))).sum(dim=-1)
+
 @torch.autograd.inference_mode()
 def get_distributions(
     models: tuple[BertForMaskedLM], 
@@ -110,7 +121,10 @@ def get_distributions(
 
     for i, model in enumerate(models):
 
+        total_nll = 0.0
+        total_kl = 0.0
         total_correct_predictions = 0
+
         total_masked_tokens = 0
 
         dists_model = []
@@ -127,8 +141,13 @@ def get_distributions(
             logits = model(**batch).logits[mask]
             assert logits.shape[0] == num_masked_tokens
 
+            total_nll += F.cross_entropy(logits, labels, reduction='sum')
+
             distributions = F.softmax(logits, dim=1)
             assert (distributions.sum(dim=1) - 1 < 1e-6).all()
+
+            uniform = torch.ones_like(distributions) / distributions.shape[-1]
+            total_kl += kl_divergence(distributions, uniform).sum()
 
             dists_model.extend(distributions)
 
@@ -139,8 +158,13 @@ def get_distributions(
 
         result.append(dists_model)
 
+        model_kl = (total_kl / total_masked_tokens).item()
+        model_perplexity = torch.exp(total_nll / total_masked_tokens).item()
         model_accuracy = (total_correct_predictions / total_masked_tokens).item()
-        print(f'model {i} accuracy = {model_accuracy*100:.2f}%')
+
+        print(f'KL(model[{i}], U) = {model_kl:.2f}bits')
+        print(f'PPL(model[{i}])   = {model_perplexity:.2f}')
+        print(f'ACC(model[{i}])   = {model_accuracy*100:.2f}%')
 
     return torch.stack(result)
 
