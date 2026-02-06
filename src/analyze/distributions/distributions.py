@@ -5,10 +5,10 @@ from torch import Tensor
 from logging import Logger
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
-from scipy.spatial.distance import jensenshannon
 from transformers import BertForMaskedLM, PreTrainedTokenizer
+
 from src.analyze.data import mlm_preprocess, get_dataset_dna, get_dataset_text, DeviceWrapper
-from scipy.stats import entropy
+from src.analyze.metrics import kl_divergence, jensen_shannon_distance
 
 def analyze_distributions(
     models_dict: dict, 
@@ -55,8 +55,8 @@ def analyze_distributions(
         mean_dist = compute_mean_distribution(distributions)
         data[run]['mean_dist'] = mean_dist.cpu()
 
-        #jensen_shannon = compute_jensen_shannon(distributions)
-        #data[run]['js'] = jensen_shannon
+        jensen_shannon = compute_jensen_shannon(distributions)
+        data[run]['js'] = jensen_shannon
 
     return data
 
@@ -72,37 +72,31 @@ def compute_jensen_shannon(
     desc = f'computing jensen-shannon for {len(top_p_values)} p-values'
 
     total_values = 0
-    total_nan_values = 0
 
     result = {}
     for p in tqdm(top_p_values, desc=desc):
 
-        total = jensen_shannon_p = 0
-        dists_top_p = top_p_reweight(distributions, p).cpu()
+        total = jsd_p = 0
+        dists_top_p = top_p_reweight(distributions, p)
 
         for i, a in enumerate(dists_top_p):
             for b in dists_top_p[i+1:]:
-                js = jensenshannon(a, b, base=2, axis=1)
 
-                nan = np.isnan(js)
-                total_nan_values += nan.sum()
-                total_values += nan.size
+                jsd = jensen_shannon_distance(a, b)
 
-                js[nan] = np.nanmean(js)
-                jensen_shannon_p += js.mean()
+                nan = torch.isnan(jsd)
+                nan_mean = jsd[~nan].mean()
+                jsd[nan] = nan_mean
+
+                total_values += jsd.numel()
+                jsd_p += jsd.mean()
 
                 total += 1
 
-        result[p] = float(jensen_shannon_p / total)
+        result[p] = float(jsd_p / total)
 
-    print(f'<js>: there was {total_nan_values:,} / {total_values:,} nan values set to np.nanmean')
+    print(f'<jsd>: total values {total_values:,}')
     return result
-
-def kl_divergence(p: Tensor, q: Tensor) -> Tensor:
-    '''KL for p, q of shape [N x vocab_size].'''
-    p = p.clamp_min(1e-10); q = q.clamp_min(1e-10)
-    assert (p.sum(dim=-1) - 1 < 1e-6).all() and (q.sum(dim=-1) - 1 < 1e-6).all()
-    return (p * (torch.log2(p) - torch.log2(q))).sum(dim=-1)
 
 @torch.autograd.inference_mode()
 def get_distributions(

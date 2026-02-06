@@ -43,12 +43,16 @@ def analyze_fisher(models_dict: dict, tokenizers: list[PreTrainedTokenizer], arg
 
         fisher_information = get_fisher_information(models, dataloader)
         reduced = reduce_fisher_models(fisher_information)
+
+        for m in range(len(models)): 
+            reduced_model = reduce_fisher_group(fisher_information[m])
+            data[run][f'fisher_{m}'] = reduce_fisher_sum(reduced_model)
+
         reduced = reduce_fisher_group(reduced)
-        #reduced = reduce_fisher_normalize(reduced)
         reduced = reduce_fisher_group_more(reduced)
         reduced = reduce_fisher_sum(reduced)
-        print(reduced)
-        data[run] = reduced
+
+        data[run]['fisher'] = reduced
 
         [model.cpu() for model in models]
 
@@ -116,9 +120,11 @@ def get_fisher_information(
                 fisher_model[name] += (params.grad**2).flatten()
 
         for name in fisher_model:
-            fisher_model[name] /= num_masked_tokens
+            fisher_model[name] /= total_masked_tokens
 
         fisher_information[i] = fisher_model
+
+        print(f'total masked tokens = {total_masked_tokens}')
 
     return fisher_information
 
