@@ -114,42 +114,6 @@ def get_fisher_information(
 
     return fisher_information
 
-def reduce_fisher_sum(fisher: dict[str, Tensor]) -> dict[str, Tensor]:
-    for layer, tensor in fisher.items():
-        if isinstance(tensor, tuple): 
-            fisher[layer] = tensor[0]
-        else: fisher[layer] = tensor.sum().item()
-
-    return fisher
-
-def reduce_fisher_group_more(fisher: dict[str, Tensor]) -> dict[str, Tensor]:
-    toremove = []
-    sum_encoder = 0.0
-    sum_params = 0
-    for layer, (s, t) in fisher.items():
-        if 'encoder' in layer:
-            sum_encoder += s
-            sum_params += t
-            toremove.append(layer)
-
-    for layer in toremove: fisher.pop(layer)
-    fisher['encoder'] = (sum_encoder, sum_params)
-    return fisher
-
-def reduce_fisher_models(fisher: dict[int, dict]) -> dict[str, Tensor]:
-    new_fisher = {}
-
-    for model in fisher.values():
-        for layer, tensor in model.items():
-            if layer not in new_fisher:
-                new_fisher[layer] = tensor
-            else: new_fisher[layer] += tensor
-
-    for layer, tensor in model.items():
-        new_fisher[layer] /= len(fisher.keys())
-
-    return new_fisher
-
 def reduce_fisher_group(fisher: dict[str, Tensor], num_encoder_layers: int = 12) -> dict[str, Tensor]:
     match_layer = lambda i, layer: layer.startswith(f'bert.encoder.layer') and int(layer.split('.')[3]) == i
 
@@ -205,4 +169,40 @@ def reduce_fisher_group(fisher: dict[str, Tensor], num_encoder_layers: int = 12)
 
         fisher[f'encoder.{i}'] = (sum_encoder, params_encoder)
 
+    return fisher
+
+def reduce_fisher_models(fisher: dict[int, dict]) -> dict[str, Tensor]:
+    new_fisher = {}
+
+    for model in fisher.values():
+        for layer, tensor in model.items():
+            if layer not in new_fisher:
+                new_fisher[layer] = tensor
+            else: new_fisher[layer] += tensor
+
+    for layer, tensor in model.items():
+        new_fisher[layer] /= len(fisher.keys())
+
+    return new_fisher
+
+def reduce_fisher_sum(fisher: dict[str, Tensor]) -> dict[str, Tensor]:
+    for layer, tensor in fisher.items():
+        if isinstance(tensor, tuple): 
+            fisher[layer] = tensor[0]
+        else: fisher[layer] = tensor.sum().item()
+
+    return fisher
+
+def reduce_fisher_group_more(fisher: dict[str, Tensor]) -> dict[str, Tensor]:
+    toremove = []
+    sum_encoder = 0.0
+    sum_params = 0
+    for layer, (s, t) in fisher.items():
+        if 'encoder' in layer:
+            sum_encoder += s
+            sum_params += t
+            toremove.append(layer)
+
+    for layer in toremove: fisher.pop(layer)
+    fisher['encoder'] = (sum_encoder, sum_params)
     return fisher

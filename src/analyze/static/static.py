@@ -10,7 +10,7 @@ def analyze_word_embeddings(models_dict: dict, logger) -> dict:
 
     data = {run: {} for run in models_dict.keys()}
     
-    kvalues = [1, 3, 5, 10, 20, 50, 100, 1000, 4000]
+    k_values = [1, 3, 5, 10, 20, 50, 100, 1000, 4000]
 
     for run, models in models_dict.items():
         logger.info(f' extracting word embeddings for run {run}...')
@@ -19,7 +19,7 @@ def analyze_word_embeddings(models_dict: dict, logger) -> dict:
         logger.info(f' computing cosine similarities...')
         cosine_similarities = torch.stack([m.cosine_similarity(E, E) for E in embeddings], dim=0)
 
-        for k in kvalues:
+        for k in k_values:
             logger.info(f' computing top-{k} overlap...')
             data[run][f'top_{k}'] = m.topk(cosine_similarities.cpu(), k=k)
 

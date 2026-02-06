@@ -1,8 +1,6 @@
 import torch
-import numpy as np
 from tqdm import tqdm
 from torch import Tensor
-from logging import Logger
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
 from transformers import BertForMaskedLM, PreTrainedTokenizer
@@ -21,6 +19,8 @@ def analyze_distributions(
     logger = args.logger
     n_samples = args.samples
     batch_size = args.batch_size
+
+    top_p_values = [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
     logger.info(f' computing metrics on distributions...')
 
@@ -49,14 +49,16 @@ def analyze_distributions(
             shuffle=False,
         )
 
-        distributions = get_distributions(models, dataloader)
+        distributions = get_distributions(models, dataloader, logger)
         assert (distributions.sum(dim=-1) - 1 < 1e-6).all()
 
         mean_dist = compute_mean_distribution(distributions)
         data[run]['mean_dist'] = mean_dist.cpu()
 
-        jensen_shannon = compute_jensen_shannon(distributions)
+        jensen_shannon = compute_jensen_shannon(distributions, top_p_values, logger)
         data[run]['js'] = jensen_shannon
+
+        [model.cpu() for model in models]
 
     return data
 
@@ -67,7 +69,8 @@ def compute_mean_distribution(distributions: dict[int, Tensor]) -> Tensor:
 
 def compute_jensen_shannon(
     distributions: dict[int, Tensor],
-    top_p_values: list[float] = [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+    top_p_values: list[float],
+    logger,
 ) -> dict[float, float]:
     desc = f'computing jensen-shannon for {len(top_p_values)} p-values'
 
@@ -95,13 +98,14 @@ def compute_jensen_shannon(
 
         result[p] = float(jsd_p / total)
 
-    print(f'<jsd>: total values {total_values:,}')
+    logger.info(f' jensen-shannon total values = {total_values:,}')
     return result
 
 @torch.autograd.inference_mode()
 def get_distributions(
     models: tuple[BertForMaskedLM], 
     dataloader: DataLoader, 
+    logger,
 )-> Tensor:
     '''
     Extract distributions over masked tokens.
@@ -156,9 +160,9 @@ def get_distributions(
         model_perplexity = torch.exp(total_nll / total_masked_tokens).item()
         model_accuracy = (total_correct_predictions / total_masked_tokens).item()
 
-        print(f'KL(model[{i}], U) = {model_kl:.2f}bits')
-        print(f'PPL(model[{i}])   = {model_perplexity:.2f}')
-        print(f'ACC(model[{i}])   = {model_accuracy*100:.2f}%')
+        logger.info(f' KL(model[{i}], U) = {model_kl:.2f}bits')
+        logger.info(f' PPL(model[{i}])   = {model_perplexity:.2f}')
+        logger.info(f' ACC(model[{i}])   = {model_accuracy*100:.2f}%')
 
     return torch.stack(result)
 
