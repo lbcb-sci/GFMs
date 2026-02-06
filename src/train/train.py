@@ -6,8 +6,8 @@ from transformers import BertForMaskedLM, BertConfig
 from transformers import DataCollatorForLanguageModeling, Trainer, set_seed
 
 from .tokenizer import train_bpe_tokenizer, load_6mer_tokenizer, make_iterator, clean_text
-from src.utils import count_parameters, get_run_path, get_training_args
 from .data import get_dataset_text, get_dataset_dna
+from src.utils import count_parameters, get_run_path, get_training_args
 
 def train(type: str, **args) -> None:
     is_text = type == 'text'

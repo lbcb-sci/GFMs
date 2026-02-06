@@ -2,9 +2,8 @@ import torch
 import numpy as np
 from torch import Tensor
 from functools import partial
-from torch.nn import functional as F
-from typing import Callable, Iterable
 from scipy.spatial import procrustes
+from typing import Callable, Iterable
 
 from torchmetrics.functional.pairwise import pairwise_cosine_similarity
 

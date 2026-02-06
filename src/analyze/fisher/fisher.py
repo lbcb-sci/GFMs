@@ -58,20 +58,6 @@ def analyze_fisher(models_dict: dict, tokenizers: list[PreTrainedTokenizer], arg
 
     return data
 
-def encoder_dominance(fisher):
-    grouped = group_fisher(fisher)
-
-    enc  = grouped['encoder']
-    emb  = grouped['embeddings']
-    head = grouped['head']
-
-    results = []
-    for en, em, h in zip(enc, emb, head):
-        encoder_dominance = en / (en + em + h)
-        results.append(encoder_dominance)
-
-    return results
-
 @torch.autograd.enable_grad()
 def get_fisher_information(
     models: tuple[BertForMaskedLM],
@@ -150,15 +136,6 @@ def reduce_fisher_group_more(fisher: dict[str, Tensor]) -> dict[str, Tensor]:
     fisher['encoder'] = (sum_encoder, sum_params)
     return fisher
 
-def reduce_fisher_normalize(fisher: dict[str, Tensor]) -> dict[str, Tensor]:
-
-    for layer, tensor in fisher.items():
-        if isinstance(tensor, tuple): 
-            fisher[layer] = tensor[0] / tensor[1]
-        else: pass
-
-    return fisher
-
 def reduce_fisher_models(fisher: dict[int, dict]) -> dict[str, Tensor]:
     new_fisher = {}
 
@@ -229,24 +206,3 @@ def reduce_fisher_group(fisher: dict[str, Tensor], num_encoder_layers: int = 12)
         fisher[f'encoder.{i}'] = (sum_encoder, params_encoder)
 
     return fisher
-
-def group_fisher(fisher: dict[str, Tensor]):
-    result = {'embeddings': [], 'encoder': [], 'head': []}
-
-    for model in fisher.values():
-
-        total_head = 0.0
-        total_embeddings = 0.0
-        total_encoder = 0.0
-
-        for layer, tensor in model.items():
-            if   'cls' in layer : total_head += tensor.sum().item()
-            elif 'embeddings' in layer: total_embeddings += tensor.sum().item()
-            elif 'encoder' in layer: total_encoder += tensor.sum().item()
-            else: raise Exception(layer)
-
-        result['embeddings'].append(total_embeddings)
-        result['encoder'].append(total_encoder)
-        result['head'].append(total_head)
-
-    return result

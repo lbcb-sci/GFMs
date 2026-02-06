@@ -8,10 +8,8 @@ from transformers import BertConfig, BertForMaskedLM, AutoTokenizer
 from src.analyze.distributions import analyze_distributions
 from src.analyze.static import analyze_word_embeddings
 from src.analyze.fisher import analyze_fisher
-
 from src.utils import get_logger, count_parameters
 from .plotting import *
-
 
 def main() -> None:
     args = parse_args()
@@ -38,6 +36,7 @@ def main() -> None:
                 print(run_name)
                 for metric, (mean, std) in run.items():
                     print(f'- {metric}: {mean:.2f} {std:.2f}')
+                print()
 
         case 'fisher': 
 
@@ -46,7 +45,6 @@ def main() -> None:
             results = analyze_fisher(models, tokenizers, args)
             logger.info(' fisher information analysis done.\n')
             pprint(results)
-
 
             dna_bpe_key = list(filter(lambda k: 'dna' in k and 'bpe' in k,list(models.keys())))[0]
             dna_kmer_key = list(filter(lambda k: 'dna' in k and 'kmer' in k,list(models.keys())))[0]

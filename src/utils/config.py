@@ -59,17 +59,17 @@ def get_training_args(run_name: str, seed: int, **args):
         data_seed=42, # deterministic dataloader
     )
 
-# base configuration for training on 1b tokens
+# base configuration
 base = {
     'N': 5,    # number of models to train
-    'kmer': 6, # vocab size = 4**kmer + special tokens
+    'kmer': 6, # vocab size = 4**kmer
 
     'epochs': 5,
     'batch_size': 64,
     'max_length': 512,
     'eval_size': 10_000,
     'train_size': 2_000_000,
-    # 5 * 512 * 2M ~ 5b tokens
+    # 5 * 512 * 2M = 5.12b tokens
 }
 
 _test = { # very small config for testing
@@ -93,7 +93,8 @@ def get_config_90M() -> dict:
     (This one simply returns the default BERT configuration as provided by HuggingFace.)
     '''
     config = base.copy()
-    config['bertconfig'] = BertConfig(vocab_size=0) # setting vocab size to 0 because it will be updated by tokenizer
+    config['bertconfig'] = BertConfig(vocab_size=0)
+    # setting vocab size to 0 because it will be updated after loading tokenizer
     return config
 
 def get_config_20M() -> dict:

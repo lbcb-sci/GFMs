@@ -1,3 +1,5 @@
+'''Measures vocab overlap between BPE and k-mer DNA models.'''
+
 from transformers import AutoTokenizer
 
 bpe = AutoTokenizer.from_pretrained('runs/90M_dna_bpe/1', local_files_only=True)
