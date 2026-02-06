@@ -2,8 +2,6 @@
 
 Analysis of Genomic Foundation Models. This repository aims to implement a series of experiments to critically evaluate the field of "foundation" models for genomics. 
 
-[This short essay](essay.pdf) explains my view on GFMs.
-
 ## Setup
 
 This project was built with `uv`, you can also run it as usual by installing the dependencies in `requirements.txt`.
