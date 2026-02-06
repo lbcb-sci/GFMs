@@ -14,8 +14,6 @@ def analyze_distributions(
     args,
 ) -> dict:
 
-    '''Analyze the distributions of models over masked tokens.'''
-
     logger = args.logger
     n_samples = args.samples
     batch_size = args.batch_size
@@ -39,7 +37,7 @@ def analyze_distributions(
         remove = ['text', 'url', 'id', 'title'] if is_text else ['text']
 
         logger.info( 'masking tokens in dataset...')
-        preprocess = lambda batch: mlm_preprocess(batch, tokenizer, mask_prob=0.05)
+        preprocess = lambda batch: mlm_preprocess(batch, tokenizer, mask_prob=0.10)
         encoded = dataset.map(preprocess, batched=True, remove_columns=remove, load_from_cache_file=False)
         encoded.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
 
@@ -107,13 +105,7 @@ def get_distributions(
     dataloader: DataLoader, 
     logger,
 )-> Tensor:
-    '''
-    Extract distributions over masked tokens.
-    
-    Also computes perplexity and accuracy.
-
-    Returns tensor of [models x total_masked_tokens x vocab_size].
-    '''
+    '''Extract distributions over masked tokens. Also computes KL div, perplexity and accuracy.'''
 
     result = []
 
@@ -163,6 +155,8 @@ def get_distributions(
         logger.info(f' KL(model[{i}], U) = {model_kl:.2f}bits')
         logger.info(f' PPL(model[{i}])   = {model_perplexity:.2f}')
         logger.info(f' ACC(model[{i}])   = {model_accuracy*100:.2f}%')
+
+    logger.info(f' total masked tokens = {total_masked_tokens}')
 
     return torch.stack(result)
 

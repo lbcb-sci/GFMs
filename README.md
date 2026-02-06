@@ -21,7 +21,7 @@ There are two main modules in `src`: `train` and `analyze`. They should be calle
 
 ### Configuration
 
-The configuration of the models can be set in `src/utils/config.py` it defaults to the default HuggingFace BERT config (rougly ~90M params) and 5b tokens for all models. 
+The configuration of the models can be set in `src/utils/config.py`. 
 
 ### Training
 
@@ -33,7 +33,7 @@ uv run -m src.train --type {text, dna} --tokenizer {bpe, kmer} --size {4M, 20M, 
 
 Models are saved in `runs/<timestamp>_<type>_<tokenizer>/<id>` so that they can be retrieved later for analysis.
 
-For example, if you run `uv run -m src.train --type dna --tokenizer kler`, it will create:
+For example, if you run `uv run -m src.train --type dna --tokenizer kmer`, it will create:
 ```bash
 runs/<timestamp>_dna_kmer/1
 runs/<timestamp>_dna_kmer/2

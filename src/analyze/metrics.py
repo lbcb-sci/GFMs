@@ -4,7 +4,6 @@ from torch import Tensor
 from functools import partial
 from scipy.spatial import procrustes
 from typing import Callable, Iterable
-
 from torchmetrics.functional.pairwise import pairwise_cosine_similarity
 
 def cosine_similarity(A: Tensor, B: Tensor) -> Tensor:
@@ -90,7 +89,8 @@ def meanstd(values: Iterable) -> tuple[float, float]:
     return float(np.mean(values)), float(np.std(values))
 
 def rankdata(x: Tensor) -> Tensor:
-    '''Compute ranks along last dimension (average ranks for ties).'''
+    '''Compute ranks along last dimension.'''
+
     tmp = x.argsort(dim=-1)
     ranks = torch.zeros_like(tmp, dtype=torch.float)
 
@@ -104,7 +104,8 @@ def rankdata(x: Tensor) -> Tensor:
     return ranks
 
 def local_spearman_correlation(A: Tensor, B: Tensor, k: int) -> Tensor:
-    '''Local (row-wise) Spearman correlation between two similarity matrices.'''
+    '''Local Spearman correlation between two similarity matrices.'''
+
     N = A.shape[0]
     mask = ~torch.eye(N, dtype=torch.bool, device=A.device)
     A = A[mask].view(N, N-1)
@@ -141,6 +142,8 @@ def local_spearman(cosine_similarities: Tensor, k: int) -> float:
     return meanstd(compute_pairwise(cosine_similarities, metric))
 
 def get_procrustes(embeddings: Tensor) -> Tensor:
+    '''Get Procrustes pairwise.'''
+
     results = []
     for i, a in enumerate(embeddings):
         for b in embeddings[i+1:]: results.append(procrustes(a, b))

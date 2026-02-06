@@ -3,13 +3,13 @@ from tqdm import tqdm
 from torch import Tensor
 from logging import Logger
 import torch.nn.functional as F
+from collections import defaultdict
 from torch.utils.data import DataLoader
 from transformers import BertForMaskedLM, PreTrainedTokenizer
 
 from src.analyze.data import mlm_preprocess, get_dataset_dna, get_dataset_text, DeviceWrapper
 
 def analyze_fisher(models_dict: dict, tokenizers: list[PreTrainedTokenizer], args) -> dict:
-
     logger: Logger = args.logger
     n_samples: int = args.samples 
     batch_size: int = args.batch_size
@@ -31,7 +31,7 @@ def analyze_fisher(models_dict: dict, tokenizers: list[PreTrainedTokenizer], arg
         remove = ['text', 'url', 'id', 'title'] if is_text else ['text']
 
         logger.info( 'masking tokens in dataset...')
-        preprocess = lambda batch: mlm_preprocess(batch, tokenizer, mask_prob=0.05)
+        preprocess = lambda batch: mlm_preprocess(batch, tokenizer, mask_prob=0.10)
         encoded = dataset.map(preprocess, batched=True, remove_columns=remove, load_from_cache_file=False)
         encoded.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
 
@@ -41,18 +41,10 @@ def analyze_fisher(models_dict: dict, tokenizers: list[PreTrainedTokenizer], arg
             shuffle=False,
         )
 
-        fisher_information = get_fisher_information(models, dataloader)
-        reduced = reduce_fisher_models(fisher_information)
+        fisher_information = get_fisher_information(models, dataloader, logger)
 
-        for m in range(len(models)): 
-            reduced_model = reduce_fisher_group(fisher_information[m])
-            data[run][f'fisher_{m}'] = reduce_fisher_sum(reduced_model)
-
-        reduced = reduce_fisher_group(reduced)
-        reduced = reduce_fisher_group_more(reduced)
-        reduced = reduce_fisher_sum(reduced)
-
-        data[run]['fisher'] = reduced
+        data[run][f'fisher_full'] = reduce_fisher(fisher_information, collapse_encoder=False)
+        data[run]['fisher'] = reduce_fisher_average_models(fisher_information)
 
         [model.cpu() for model in models]
 
@@ -62,16 +54,11 @@ def analyze_fisher(models_dict: dict, tokenizers: list[PreTrainedTokenizer], arg
 def get_fisher_information(
     models: tuple[BertForMaskedLM],
     dataloader: DataLoader,
-    min_params_layer: int = 0,
+    logger,
 ) -> dict[int, dict[str, Tensor]]:
-    '''
-    Compute averaged squared gradients of negative log likelihood.
+    '''Compute averaged squared gradients of negative log likelihood. Empirical estimate of diag(FIM).'''
 
-    Empirical estimate of diag(FIM).
-    '''
-
-    track_params = lambda params: \
-        (params.grad is not None) and (params.numel() > min_params_layer)
+    track_params = lambda params: params.grad is not None
 
     fisher_information = {}
 
@@ -110,99 +97,126 @@ def get_fisher_information(
 
         fisher_information[i] = fisher_model
 
-        print(f'total masked tokens = {total_masked_tokens}')
+        logger.info(f' total masked tokens = {total_masked_tokens}')
 
     return fisher_information
 
-def reduce_fisher_group(fisher: dict[str, Tensor], num_encoder_layers: int = 12) -> dict[str, Tensor]:
-    match_layer = lambda i, layer: layer.startswith(f'bert.encoder.layer') and int(layer.split('.')[3]) == i
+def reduce_fisher_average_models(
+    fisher,
+    *,
+    group_layers=True,
+    collapse_encoder=True,
+    sum_only=True,
+):
+    out = {}
+    for m in fisher.values():
+        for k, v in m.items():
+            out[k] = v.clone() if k not in out else out[k] + v
+    for k in out:
+        out[k] /= len(fisher)
+    fisher = out
 
-    sum_embeddings = 0.0
-    params_embeddings = 0
+    # group layers
+    if group_layers:
+        grouped = defaultdict(list)
 
-    for layer, tensor in fisher.items():
-        if not 'embeddings' in layer: continue
-        params_embeddings += tensor.numel()
-        sum_embeddings += tensor.sum().item()
+        def enc_idx(name):
+            if name.startswith("bert.encoder.layer"):
+                return int(name.split(".")[3])
+            return None
 
-    toremove = []
-    for layer, tensor in fisher.items():
-        if not 'embeddings' in layer: continue
-        toremove.append(layer)
+        for name, tensor in fisher.items():
+            if 'embeddings' in name: grouped['embeddings'].append(tensor)
+            elif 'cls' in name: grouped['head'].append(tensor)
+            else:
+                i = enc_idx(name)
+                if i is not None: grouped[f'encoder.{i}'].append(tensor)
 
-    for layer in toremove: fisher.pop(layer)
+        fisher = {
+            k: (
+                sum(t.sum().item() for t in v),
+                sum(t.numel() for t in v),
+            )
+            for k, v in grouped.items()
+        }
 
-    fisher[f'embeddings'] = (sum_embeddings, params_embeddings)
+    # collapse encoders
+    if collapse_encoder:
+        enc_sum = 0.0
+        enc_params = 0
+        out = {}
 
-    sum_head = 0.0
-    params_head = 0
+        for k, (s, p) in fisher.items():
+            if k.startswith('encoder.'):
+                enc_sum += s
+                enc_params += p
+            else:
+                out[k] = (s, p)
 
-    for layer, tensor in fisher.items():
-        if not 'cls' in layer: continue
-        params_head += tensor.numel()
-        sum_head += tensor.sum().item()
+        if enc_params > 0:
+            out['encoder'] = (enc_sum, enc_params)
 
-    toremove = []
-    for layer, tensor in fisher.items():
-        if not 'cls' in layer: continue
-        toremove.append(layer)
+        fisher = out
 
-    for layer in toremove: fisher.pop(layer)
-
-    fisher[f'head'] = (sum_head, params_head)
-
-    for i in range(num_encoder_layers):
-        sum_encoder = 0.0
-        params_encoder = 0
-
-        for layer, tensor in fisher.items():
-            if not match_layer(i, layer): continue
-            params_encoder += tensor.numel()
-            sum_encoder += tensor.sum().item()
-
-        toremove = []
-        for layer, tensor in fisher.items():
-            if not match_layer(i, layer): continue
-            toremove.append(layer)
-
-        for layer in toremove: fisher.pop(layer)
-
-        fisher[f'encoder.{i}'] = (sum_encoder, params_encoder)
-
-    return fisher
-
-def reduce_fisher_models(fisher: dict[int, dict]) -> dict[str, Tensor]:
-    new_fisher = {}
-
-    for model in fisher.values():
-        for layer, tensor in model.items():
-            if layer not in new_fisher:
-                new_fisher[layer] = tensor
-            else: new_fisher[layer] += tensor
-
-    for layer, tensor in model.items():
-        new_fisher[layer] /= len(fisher.keys())
-
-    return new_fisher
-
-def reduce_fisher_sum(fisher: dict[str, Tensor]) -> dict[str, Tensor]:
-    for layer, tensor in fisher.items():
-        if isinstance(tensor, tuple): 
-            fisher[layer] = tensor[0]
-        else: fisher[layer] = tensor.sum().item()
+    # scalar output
+    if sum_only: fisher = {k: v[0] for k, v in fisher.items()}
 
     return fisher
 
-def reduce_fisher_group_more(fisher: dict[str, Tensor]) -> dict[str, Tensor]:
-    toremove = []
-    sum_encoder = 0.0
-    sum_params = 0
-    for layer, (s, t) in fisher.items():
-        if 'encoder' in layer:
-            sum_encoder += s
-            sum_params += t
-            toremove.append(layer)
+def reduce_fisher(
+    fisher_models,
+    *,
+    group_layers=True,
+    collapse_encoder=True,
+    sum_only=True,
+):
+    result = {}
 
-    for layer in toremove: fisher.pop(layer)
-    fisher['encoder'] = (sum_encoder, sum_params)
-    return fisher
+    for model in fisher_models:
+        fisher = fisher_models[model]
+
+        if group_layers:
+            grouped = defaultdict(list)
+
+            def enc_idx(name):
+                if name.startswith("bert.encoder.layer"):
+                    return int(name.split(".")[3])
+                return None
+
+            for name, tensor in fisher.items():
+                if 'embeddings' in name: grouped['embeddings'].append(tensor)
+                elif 'cls' in name: grouped['head'].append(tensor)
+                else:
+                    i = enc_idx(name)
+                    if i is not None: grouped[f'encoder.{i}'].append(tensor)
+
+            fisher = {
+                k: (
+                    sum(t.sum().item() for t in v),
+                    sum(t.numel() for t in v),
+                )
+                for k, v in grouped.items()
+            }
+
+        if collapse_encoder:
+            enc_sum = 0.0
+            enc_params = 0
+            out = {}
+
+            for k, (s, p) in fisher.items():
+                if k.startswith('encoder.'):
+                    enc_sum += s
+                    enc_params += p
+                else:
+                    out[k] = (s, p)
+
+            if enc_params > 0:
+                out['encoder'] = (enc_sum, enc_params)
+
+            fisher = out
+
+        # scalar output
+        if sum_only: fisher = {k: v[0] for k, v in fisher.items()}
+        result[model] = fisher
+
+    return result

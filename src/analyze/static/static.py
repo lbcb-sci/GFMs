@@ -6,7 +6,7 @@ from transformers import BertForMaskedLM
 from src.analyze import metrics as m
 
 def analyze_word_embeddings(models_dict: dict, logger) -> dict:
-    '''Main static analysis function, collecting metrics and returning dict of values.'''
+    '''Compute agreement metrics on static word embeddings.'''
 
     data = {run: {} for run in models_dict.keys()}
     

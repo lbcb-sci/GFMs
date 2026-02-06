@@ -1,11 +1,10 @@
 import os
 import argparse
-import numpy as np
 from pathlib import Path
 from pprint import pprint
 from transformers import BertConfig, BertForMaskedLM, AutoTokenizer
 
-from src.analyze.distributions import analyze_distributions
+from src.analyze.distribution import analyze_distributions
 from src.analyze.static import analyze_word_embeddings
 from src.analyze.fisher import analyze_fisher
 from src.utils import get_logger, count_parameters
@@ -46,33 +45,20 @@ def main() -> None:
             logger.info(' fisher information analysis done.\n')
             pprint(results)
 
-            dna_bpe_key = list(filter(lambda k: 'dna' in k and 'bpe' in k,list(models.keys())))[0]
-            dna_kmer_key = list(filter(lambda k: 'dna' in k and 'kmer' in k,list(models.keys())))[0]
+            dna_bpe_key = list(filter(lambda k: 'dna' in k and 'bpe' in k, list(models.keys())))[0]
+            dna_kmer_key = list(filter(lambda k: 'dna' in k and 'kmer' in k, list(models.keys())))[0]
             text_key = list(filter(lambda k: 'text' in k, list(models.keys())))[0]
 
-            text = results[text_key]
-            dna_bpe = results[dna_bpe_key]
-            dna_kmer = results[dna_kmer_key]
+            text = results[text_key]['fisher']
+            dna_bpe = results[dna_bpe_key]['fisher']
+            dna_kmer = results[dna_kmer_key]['fisher']
 
-            xlabels = []
-            for l in list(text['fisher'].keys()):
-                if 'embeddings' in l: xlabels.append(l)
-            for l in list(text['fisher'].keys()):
-                if 'encoder' in l: xlabels.append(l)
-            for l in list(text['fisher'].keys()):
-                if 'head' in l: xlabels.append(l)
+            text_full = results[text_key]['fisher_full']
+            dna_bpe_full = results[dna_bpe_key]['fisher_full']
+            dna_kmer_full = results[dna_kmer_key]['fisher_full']
 
-            y_text = np.array([text['fisher'][l] for l in xlabels])
-            y_dna_bpe = np.array([dna_bpe['fisher'][l] for l in xlabels])
-            y_dna_kmer = np.array([dna_kmer['fisher'][l] for l in xlabels])
-
-            y_text /= y_text.sum()
-            y_dna_bpe /= y_dna_bpe.sum()
-            y_dna_kmer /= y_dna_kmer.sum()
-
-            plot_fisher_information(xlabels, y_text, y_dna_bpe, y_dna_kmer)
-
-            plot_full_fisher_information(text, dna_bpe, dna_kmer)
+            plot_fisher_information(text, dna_bpe, dna_kmer)
+            plot_full_fisher_information(text_full, dna_bpe_full, dna_kmer_full)
 
         case 'distribution': 
 

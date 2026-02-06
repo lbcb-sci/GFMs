@@ -1,8 +1,11 @@
-from matplotlib.ticker import FuncFormatter
-import matplotlib.pyplot as plt
-import seaborn as sns
-from src.utils import get_plots_path
+'''Functions for plotting, quite messy.'''
+
 import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
+
+from src.utils import get_plots_path
 
 COLOR_TEXT     = "#1D51AC"
 COLOR_DNA_BPE  = "#AB2617"
@@ -21,12 +24,43 @@ def init():
         "legend.fontsize": 9,
     })
 
-def plot_fisher_information(xlabels, y_text, y_dna_bpe, y_dna_kmer):
+def order_fisher(fisher: dict):
+    x, y = ['embeddings'], [fisher['embeddings']]
+    x.append('encoder')
+    y.append(fisher['encoder'])
+    x.append('head')
+    y.append(fisher['head'])
+    return x, np.array(y)
+
+def order_fisher_full(fisher: dict):
+    x, y = ['embeddings'], [fisher['embeddings']]
+
+    for i in range(len(fisher) - 2):
+        k = f'encoder.{i}'
+        v = fisher[k]
+        x.append(k)
+        y.append(v)
+
+    x.append('head')
+    y.append(fisher['head'])
+
+    return x, np.array(y)
+
+def plot_fisher_information(text, dna_bpe, dna_kmer):
+
+    xlabels, y_text = order_fisher(text)
+    _, y_dna_bpe = order_fisher(dna_bpe)
+    _, y_dna_kmer = order_fisher(dna_kmer)
+
+    y_pos = np.arange(0, len(xlabels))
+
+    y_text /= y_text.sum()
+    y_dna_bpe /= y_dna_bpe.sum()
+    y_dna_kmer /= y_dna_kmer.sum()
+
     init()
 
     fig, ax = plt.subplots(1, 2, figsize=(7, 2), sharey=True)
-
-    y_pos = np.array(list(range(len(xlabels))))
 
     ax[0].barh(y_pos, y_text, height=0.6, color=COLOR_TEXT, label='Text', linewidth=0.5, edgecolor='black')
     ax[0].legend()
@@ -71,55 +105,70 @@ def plot_fisher_information(xlabels, y_text, y_dna_bpe, y_dna_kmer):
     plt.savefig(get_plots_path() / 'fisher.pdf')
     plt.close()
 
-def plot_full_fisher_information(fisher_text, fisher_dna_bpe, fisher_dna_kmer):
-    N = len(fisher_text) - 1
-    assert N == len(fisher_dna_bpe) - 1 == len(fisher_dna_kmer) - 1
+def plot_full_fisher_information(text, dna_bpe, dna_kmer):
+    N = len(text)
+    assert N == len(dna_bpe) == len(dna_kmer)
 
     init()
 
-    fig, ax = plt.subplots(N, 2, figsize=(7, 8), sharey=True)
+    fig, ax = plt.subplots(N, 2, figsize=(7, 7), sharey=True)
 
-    for i, ((k, text), (_, dna_bpe), (_, dna_kmer)) in enumerate(zip(fisher_text.items(), fisher_dna_bpe.items(), fisher_dna_kmer.items())):
-        if k == 'fisher': continue
+    fig.subplots_adjust(
+        top=0.99,     # smaller -> less space at top
+        bottom=0.18,  # larger -> more space at bottom
+        hspace=0.05,
+        wspace=0.03,
+        right=0.99,
+        left=0.05,
+    )
 
-        x = ['embeddings'] + [f'encoder.{i}' for i in range(12)] + ['head']
-        x_pos = np.arange(len(x))
+    for model in range(N):
+        i = model
+
+        xlabels, y_text = order_fisher_full(text[model])
+        _, y_dna_bpe = order_fisher_full(dna_bpe[model])
+        _, y_dna_kmer = order_fisher_full(dna_kmer[model])
+
+        y_pos = np.arange(0, len(xlabels))
+
+        y_text /= y_text.sum()
+        y_dna_bpe /= y_dna_bpe.sum()
+        y_dna_kmer /= y_dna_kmer.sum()
+
         width = 0.4
 
         def format_y(c, pos):
-            label = x[pos]
+            label = xlabels[pos]
             label = label[0].capitalize() + label[1:]
             label = label.replace('.', ' ')
             return label
 
-        ytext = [text['embeddings']] + [text[f'encoder.{i}'] for i in range(12)] + [text['head']]
-        ydna_bpe = [dna_bpe['embeddings']] + [dna_bpe[f'encoder.{i}'] for i in range(12)] + [dna_bpe['head']]
-        ydna_kmer = [dna_kmer['embeddings']] + [dna_kmer[f'encoder.{i}'] for i in range(12)] + [dna_kmer['head']]
-
-        ytext = np.array(ytext)
-        ydna_bpe = np.array(ydna_bpe)
-        ydna_kmer = np.array(ydna_kmer)
-
         kmer = r'$k$-mer'
 
-        ax[i, 0].bar(x_pos, ytext / ytext.sum(), color=COLOR_TEXT, label=f'Text #{i+1}', linewidth=0.5, edgecolor='black')
+        ax[i, 0].bar(y_pos, y_text, color=COLOR_TEXT, label=f'Text #{i+1}', linewidth=0.5, edgecolor='black')
 
-        ax[i, 1].bar(x_pos - width/2, ydna_bpe / ydna_bpe.sum(), width, color=COLOR_DNA_BPE, label=f'DNA (BPE) #{i+1}', edgecolor='black', linewidth=0.5)
-        ax[i, 1].bar(x_pos + width/2, ydna_kmer / ydna_kmer.sum(), width, color=COLOR_DNA_KMER, label=f'DNA ({kmer}) #{i+1}', hatch='///', edgecolor='black', linewidth=0.5)
+        ax[i, 1].bar(y_pos - width/2, y_dna_bpe, width, color=COLOR_DNA_BPE, label=f'DNA (BPE) #{i+1}', edgecolor='black', linewidth=0.5)
+        ax[i, 1].bar(y_pos + width/2, y_dna_kmer, width, color=COLOR_DNA_KMER, label=f'DNA ({kmer}) #{i+1}', hatch='///', edgecolor='black', linewidth=0.5)
 
-        ax[i, 0].set_xticks(x_pos)
-        ax[i, 0].set_xticklabels(x)
-        ax[i, 1].set_xticks(x_pos)
-        ax[i, 1].set_xticklabels(x)
+        ax[i, 0].set_xticks(y_pos)
+        ax[i, 0].set_xticklabels(xlabels)
+        ax[i, 1].set_xticks(y_pos)
+        ax[i, 1].set_xticklabels(xlabels)
         
-        ax[i, 0].set_yticks([0.0, 0.5, 1.0])
-        ax[i, 1].set_yticks([0.0, 0.5, 1.0])
         if i != N - 1:
+            ax[i, 0].tick_params(axis='y', left=False, labelleft=False)
+            ax[i, 1].tick_params(axis='y', left=False, labelleft=False)
             ax[i, 0].set_xticklabels([])
             ax[i, 1].set_xticklabels([])
         else:
+            ax[i, 0].set_yticks([0.0, 0.5, 1.0])
+
+            ax[i, 0].tick_params(axis='y', left=True, labelleft=True)
+            ax[i, 1].tick_params(axis='y', left=False, labelleft=False)
+
             ax[i, 0].xaxis.set_major_formatter(FuncFormatter(format_y))
             ax[i, 1].xaxis.set_major_formatter(FuncFormatter(format_y))
+
         ax[i, 0].legend()
         ax[i, 1].legend()
         ax[i, 0].tick_params(axis='x', labelrotation=90)
@@ -128,7 +177,8 @@ def plot_full_fisher_information(fisher_text, fisher_dna_bpe, fisher_dna_kmer):
         ax[i, 0].margins(x=0.02)
         ax[i, 1].margins(x=0.02)
 
-    plt.tight_layout()
+    fig.canvas.draw()
+
     plt.savefig(get_plots_path() / 'full_fisher.pdf')
     plt.close()
 
