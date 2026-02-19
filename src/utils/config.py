@@ -1,4 +1,3 @@
-from torch.multiprocessing import cpu_count
 from transformers import BertConfig, TrainingArguments 
 
 def get_training_args(run_name: str, seed: int, **args):
@@ -59,9 +58,11 @@ def get_training_args(run_name: str, seed: int, **args):
         data_seed=42, # deterministic dataloader
     )
 
+N = 5
+
 # base configuration
 base = {
-    'N': 5,    # number of models to train
+    'N': N,    # number of models to train
     'kmer': 6, # vocab size = 4**kmer
 
     'epochs': 5,

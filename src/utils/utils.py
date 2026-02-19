@@ -34,3 +34,13 @@ def get_cache_path() -> Path:
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+DATA_TOKENIZER_PAIRS = [('text', 'bpe'), ('dna', 'bpe'), ('dna', 'kmer')]
+
+def create_results_dict() -> dict: 
+    results = {}
+    for data, tok in DATA_TOKENIZER_PAIRS:
+        if data not in results.keys(): results[data] = {}
+        results[data][tok] = {}
+
+    return results

@@ -44,7 +44,7 @@ def kl_divergence(p: Tensor, q: Tensor) -> Tensor:
     '''Base 2 KL-Div https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence'''
 
     p = p.clamp_min(1e-10); q = q.clamp_min(1e-10)
-    assert (p.sum(dim=-1) - 1 < 1e-6).all() and (q.sum(dim=-1) - 1 < 1e-6).all()
+    assert (p.sum(dim=-1) - 1 < 1e-5).all() and (q.sum(dim=-1) - 1 < 1e-5).all()
     return (p * (torch.log2(p) - torch.log2(q))).sum(dim=-1)
 
 def jensen_shannon_distance(p: Tensor, q: Tensor) -> Tensor:

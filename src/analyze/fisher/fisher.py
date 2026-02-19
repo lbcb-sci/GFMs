@@ -5,26 +5,25 @@ from logging import Logger
 import torch.nn.functional as F
 from collections import defaultdict
 from torch.utils.data import DataLoader
-from transformers import BertForMaskedLM, PreTrainedTokenizer
+from transformers import BertForMaskedLM
 
 from src.analyze.data import mlm_preprocess, get_dataset_dna, get_dataset_text, DeviceWrapper
+from src.utils import create_results_dict, DATA_TOKENIZER_PAIRS
 
-def analyze_fisher(models_dict: dict, tokenizers: list[PreTrainedTokenizer], args) -> dict:
-    logger: Logger = args.logger
-    n_samples: int = args.samples 
-    batch_size: int = args.batch_size
+def fisher(all_models: dict, tokenizers: dict, args) -> dict:
+    logger, n_samples, batch_size = args.logger, args.samples, args.batch_size
 
     logger.info(f' computing fisher information...')
 
-    data = {run: {} for run in models_dict}
+    results = create_results_dict()
 
-    for (run, models), tokenizer in zip(models_dict.items(), tokenizers):
+    for data, tok in DATA_TOKENIZER_PAIRS:
+        models = all_models[data][tok]
+        tokenizer = tokenizers[data][tok][0]
 
-        assert run in tokenizer.name_or_path
+        assert all([model.name_or_path[:-1] == tokenizer.name_or_path[:-1] for model in models])
 
-        logger.info(f' run[{run}] n_models={len(models)}')
-        logger.info(f' tokenizer: {type(tokenizer)} from {tokenizer.name_or_path}')
-        is_text = 'text' in run
+        is_text = 'text' in tokenizer.name_or_path
 
         logger.info(f' collecting dataset {"text" if is_text else "dna"}...')
         dataset = get_dataset_text(n_samples) if is_text else get_dataset_dna(n_samples)
@@ -43,12 +42,12 @@ def analyze_fisher(models_dict: dict, tokenizers: list[PreTrainedTokenizer], arg
 
         fisher_information = get_fisher_information(models, dataloader, logger)
 
-        data[run]['fisher'] = reduce_fisher_average_models(fisher_information)
-        data[run][f'fisher_full'] = reduce_fisher(fisher_information, collapse_encoder=False)
+        results[data][tok]['fisher'] = reduce_fisher_average_models(fisher_information)
+        results[data][tok][f'fisher_full'] = reduce_fisher(fisher_information, collapse_encoder=False)
 
         [model.cpu() for model in models]
 
-    return data
+    return results
 
 @torch.autograd.enable_grad()
 def get_fisher_information(

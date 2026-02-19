@@ -2,10 +2,12 @@
 
 Analysis of Genomic Foundation Models. This repository aims to implement a series of experiments to critically evaluate the field of "foundation" models for genomics. 
 
-> We train 3 ensembles each made of $N$ transformer encoder BERT models. The first ensemble is trained on English text with a byte-pair encoding tokenizer, the second on DNA sequences, also using BPE tokenization, ensuring meaningful comparison with the text models, and a third ensemble is also trained on DNA, but uses a k-mer non-overlapping tokenizer, a more widely
+We train 3 ensembles each made of $N$ transformer encoder BERT models. The first ensemble is trained on English text with a byte-pair encoding tokenizer, the second on DNA sequences, also using BPE tokenization, ensuring meaningful comparison with the text models, and a third ensemble is also trained on DNA, but uses a k-mer non-overlapping tokenizer, a more widely
 used tokenization scheme for genomic language models in practice.
 
-> Then, we analyze and compare text models to DNA models with respect to their distributions, static word embeddings, and Fisher information concentration.
+Then, we analyze and compare text models to DNA models with respect to their distributions, static word embeddings, and Fisher information concentration.
+
+The models are then pushed to HuggingFace at https://huggingface.co/collections/mrochk/bert-models-text-and-dna. 
 
 ## Setup
 
@@ -18,6 +20,8 @@ After installing `uv`, you can directly run the commands below, it will install 
 ## Usage
 
 There are two main modules in `src`: `train` and `analyze`. They should be called as Python modules (with `-m`).
+
+You can directly jump to the analysis section if you're not interested in training from scratch.
 
 ### Configuration
 

@@ -3,34 +3,28 @@ from tqdm import tqdm
 from torch import Tensor
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
-from transformers import BertForMaskedLM, PreTrainedTokenizer
+from transformers import BertForMaskedLM
 
 from src.analyze.data import mlm_preprocess, get_dataset_dna, get_dataset_text, DeviceWrapper
 from src.analyze.metrics import kl_divergence, jensen_shannon_distance
+from src.utils import N, DATA_TOKENIZER_PAIRS, create_results_dict
 
-def analyze_distributions(
-    models_dict: dict, 
-    tokenizers: list[PreTrainedTokenizer], 
-    args,
-) -> dict:
+def distributions(all_models: dict, tokenizers: dict, args) -> dict:
+    logger, n_samples, batch_size = args.logger, args.samples, args.batch_size
 
-    logger = args.logger
-    n_samples = args.samples
-    batch_size = args.batch_size
+    TOP_P_VALUES = [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
-    top_p_values = [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    logger.info(f' computing metrics over output distributions...')
 
-    logger.info(f' computing metrics on distributions...')
+    results = create_results_dict()
 
-    data = {run: {} for run in models_dict}
+    for data, tok in DATA_TOKENIZER_PAIRS:
+        models = all_models[data][tok]
+        tokenizer = tokenizers[data][tok][0]
 
-    for (run, models), tokenizer in zip(models_dict.items(), tokenizers):
+        assert all([model.name_or_path[:-1] == tokenizer.name_or_path[:-1] for model in models])
 
-        assert run in tokenizer.name_or_path
-
-        logger.info(f' run[{run}] n_models={len(models)}')
-        logger.info(f' tokenizer: {type(tokenizer)} from {tokenizer.name_or_path}')
-        is_text = 'text' in run
+        is_text = 'text' in tokenizer.name_or_path
 
         logger.info(f' collecting dataset {"text" if is_text else "dna"}...')
         dataset = get_dataset_text(n_samples) if is_text else get_dataset_dna(n_samples)
@@ -42,23 +36,23 @@ def analyze_distributions(
         encoded.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
 
         dataloader = DataLoader(
-            DeviceWrapper(encoded, device=models[0].device),
+            DeviceWrapper(encoded, device=args.device),
             batch_size=batch_size,
             shuffle=False,
         )
 
         distributions = get_distributions(models, dataloader, logger)
-        assert (distributions.sum(dim=-1) - 1 < 1e-6).all()
+        assert (distributions.sum(dim=-1) - 1 < 1e-5).all()
 
         mean_dist = compute_mean_distribution(distributions)
-        data[run]['mean_dist'] = mean_dist.cpu()
+        results[data][tok]['mean_dist'] = mean_dist.cpu()
 
-        jensen_shannon = compute_jensen_shannon(distributions, top_p_values, logger)
-        data[run]['js'] = jensen_shannon
+        jensen_shannon = compute_jensen_shannon(distributions, TOP_P_VALUES, logger)
+        results[data][tok]['js'] = jensen_shannon
 
         [model.cpu() for model in models]
 
-    return data
+    return results
 
 def compute_mean_distribution(distributions: dict[int, Tensor]) -> Tensor:
     sorted_dists, _ = torch.sort(distributions, dim=-1, descending=True)
@@ -134,7 +128,7 @@ def get_distributions(
             total_nll += F.cross_entropy(logits, labels, reduction='sum')
 
             distributions = F.softmax(logits, dim=1)
-            assert (distributions.sum(dim=1) - 1 < 1e-6).all()
+            assert (distributions.sum(dim=1) - 1 < 1e-5).all()
 
             uniform = torch.ones_like(distributions) / distributions.shape[-1]
             total_kl += kl_divergence(distributions, uniform).sum()

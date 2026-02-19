@@ -4,27 +4,31 @@ import torch.nn.functional as F
 from transformers import BertForMaskedLM
 
 from src.analyze import metrics as m
+from src.utils import DATA_TOKENIZER_PAIRS, N, create_results_dict
 
-def analyze_word_embeddings(models_dict: dict, logger) -> dict:
+def word_embeddings(all_models: dict, logger) -> dict:
     '''Compute agreement metrics on static word embeddings.'''
 
-    data = {run: {} for run in models_dict.keys()}
+    results = create_results_dict()
     
-    k_values = [1, 3, 5, 10, 20, 50, 100, 1000, 4000]
+    K_VALUES = [1, 3, 5, 10, 20, 50, 100, 1000, 4000]
 
-    for run, models in models_dict.items():
-        logger.info(f' extracting word embeddings for run {run}...')
+    for data, tok in DATA_TOKENIZER_PAIRS:
+
+        logger.info(f' extracting word embeddings for run {data}-{tok}...')
+
+        models = all_models[data][tok]
         embeddings = extract_word_embeddings(models)
 
         logger.info(f' computing cosine similarities...')
         cosine_similarities = torch.stack([m.cosine_similarity(E, E) for E in embeddings], dim=0)
 
-        for k in k_values:
+        for k in K_VALUES:
             logger.info(f' computing top-{k} overlap...')
-            data[run][f'top_{k}'] = m.topk(cosine_similarities.cpu(), k=k)
+            results[data][tok][f'top_{k}'] = m.topk(cosine_similarities.cpu(), k=k)
 
             logger.info(f' computing local spearman k={k}...')
-            data[run][f'local_spearman_{k}'] = m.local_spearman(cosine_similarities.cpu(), k=k)
+            results[data][tok][f'local_spearman_{k}'] = m.local_spearman(cosine_similarities.cpu(), k=k)
 
         logger.info(f' computing procrustes...')
         procrustes = m.get_procrustes(embeddings.cpu())
@@ -37,10 +41,10 @@ def analyze_word_embeddings(models_dict: dict, logger) -> dict:
         for X, Y in zip(procrustes_X, procrustes_Y):
             procrustes_cosine_similarities.append((F.normalize(X) * F.normalize(Y)).sum(dim=1).mean().item())
 
-        data[run]['disparities'] = m.meanstd(disparities)
-        data[run]['procrustes_cosine'] = m.meanstd(procrustes_cosine_similarities)
+        results[data][tok]['disparities'] = m.meanstd(disparities)
+        results[data][tok]['procrustes_cosine'] = m.meanstd(procrustes_cosine_similarities)
 
-    return data
+    return results
 
 def extract_word_embeddings(models: list[BertForMaskedLM]) -> Tensor:
     '''Returns a 3d tensor of stacked word embeddings.'''
