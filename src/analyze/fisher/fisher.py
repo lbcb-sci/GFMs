@@ -31,7 +31,7 @@ def analyze_fisher(models_dict: dict, tokenizers: list[PreTrainedTokenizer], arg
         remove = ['text', 'url', 'id', 'title'] if is_text else ['text']
 
         logger.info( 'masking tokens in dataset...')
-        preprocess = lambda batch: mlm_preprocess(batch, tokenizer, mask_prob=0.10)
+        preprocess = lambda batch: mlm_preprocess(batch, tokenizer, mask_prob=0.15)
         encoded = dataset.map(preprocess, batched=True, remove_columns=remove, load_from_cache_file=False)
         encoded.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
 
@@ -43,8 +43,8 @@ def analyze_fisher(models_dict: dict, tokenizers: list[PreTrainedTokenizer], arg
 
         fisher_information = get_fisher_information(models, dataloader, logger)
 
-        data[run][f'fisher_full'] = reduce_fisher(fisher_information, collapse_encoder=False)
         data[run]['fisher'] = reduce_fisher_average_models(fisher_information)
+        data[run][f'fisher_full'] = reduce_fisher(fisher_information, collapse_encoder=False)
 
         [model.cpu() for model in models]
 

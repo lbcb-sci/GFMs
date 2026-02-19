@@ -7,8 +7,8 @@ from transformers import BertConfig, BertForMaskedLM, AutoTokenizer
 from src.analyze.distribution import analyze_distributions
 from src.analyze.static import analyze_word_embeddings
 from src.analyze.fisher import analyze_fisher
+from src.analyze.plotting import *
 from src.utils import get_logger, count_parameters
-from .plotting import *
 
 def main() -> None:
     args = parse_args()
@@ -53,11 +53,12 @@ def main() -> None:
             dna_bpe = results[dna_bpe_key]['fisher']
             dna_kmer = results[dna_kmer_key]['fisher']
 
+            plot_fisher_information(text, dna_bpe, dna_kmer)
+
             text_full = results[text_key]['fisher_full']
             dna_bpe_full = results[dna_bpe_key]['fisher_full']
             dna_kmer_full = results[dna_kmer_key]['fisher_full']
 
-            plot_fisher_information(text, dna_bpe, dna_kmer)
             plot_full_fisher_information(text_full, dna_bpe_full, dna_kmer_full)
 
         case 'distribution': 
@@ -83,8 +84,7 @@ def main() -> None:
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Analyze the trained models.')
-    parser.add_argument('--type', type=str, required=True, 
-                        choices=['static', 'distribution', 'fisher', 'attention', 'hidden'])
+    parser.add_argument('--type', type=str, required=True, choices=['static', 'distribution', 'fisher'])
     parser.add_argument('--runs', type=str, nargs='+', required=True)
     parser.add_argument('--device', type=str, choices=['cpu', 'cuda'], default='cuda')
     parser.add_argument('--samples', type=int, default=256)

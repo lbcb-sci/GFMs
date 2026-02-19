@@ -47,6 +47,10 @@ def order_fisher_full(fisher: dict):
     return x, np.array(y)
 
 def plot_fisher_information(text, dna_bpe, dna_kmer):
+    print('plotting fisher information')
+    print(text)
+    print(dna_bpe)
+    print(dna_kmer)
 
     xlabels, y_text = order_fisher(text)
     _, y_dna_bpe = order_fisher(dna_bpe)
@@ -111,7 +115,7 @@ def plot_full_fisher_information(text, dna_bpe, dna_kmer):
 
     init()
 
-    fig, ax = plt.subplots(N, 2, figsize=(7, 7), sharey=True)
+    fig, ax = plt.subplots(N, 2, figsize=(7, 7.5), sharey=True)
 
     fig.subplots_adjust(
         top=0.99,     # smaller -> less space at top
