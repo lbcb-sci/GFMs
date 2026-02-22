@@ -15,7 +15,7 @@ for data, tok in pairs:
 
     for i, idx in enumerate(indices):
 
-        path = f'./runs/90M_{data}_{tok}/{idx}'
+        path = f'../runs/90M_{data}_{tok}/{idx}'
 
         model = BertForMaskedLM.from_pretrained(
             path, local_files_only=True,
