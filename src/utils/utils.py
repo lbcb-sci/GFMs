@@ -1,36 +1,53 @@
 import logging
-from time import time
+from datetime import datetime
 from pathlib import Path
 
-def get_logger(name: str):
+from src.utils.paths import PATHS
+
+
+def get_logger(name: str) -> logging.Logger:
     logging.basicConfig(level=logging.INFO)
     logging.getLogger('httpx').setLevel(logging.WARNING)
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
     return logger
 
-def get_root_path():
+
+def get_root_path() -> Path:
     return Path(__file__).resolve().parent.parent.parent
 
-def get_runs_path():
-    path = get_root_path() / 'runs'
+
+def get_savedir_path() -> Path:
+    path = PATHS['savedir']
     path.mkdir(exist_ok=True)
     return path
 
-def get_run_path(type: str, tokenizer: str) -> Path:
-    run_path = get_runs_path() / f'{int(time())}_{type}_{tokenizer}'
+
+def get_runs_path() -> Path:
+    path = get_savedir_path() / 'runs'
+    path.mkdir(exist_ok=True)
+    return path
+
+
+def get_run_path(type: str, tokenizer: str, description: str = None) -> Path:
+    time_start = datetime.now().strftime('%y-%m-%d_%H%M%S')
+    description = f'_{description}' if description else ''
+    run_path = get_runs_path() / f'{time_start}_{type}_{tokenizer}{description}'
     run_path.mkdir(exist_ok=False)
     return run_path
 
-def get_plots_path() -> Path: 
-    data_dir = get_root_path() / 'plots'
+
+def get_plots_path() -> Path:
+    data_dir = get_savedir_path() / 'plots'
     data_dir.mkdir(exist_ok=True)
     return data_dir
 
-def get_cache_path() -> Path: 
-    data_dir = get_root_path() / 'cache'
+
+def get_cache_path() -> Path:
+    data_dir = get_savedir_path() / 'cache'
     data_dir.mkdir(exist_ok=True)
     return data_dir
+
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
