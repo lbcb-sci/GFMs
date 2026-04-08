@@ -11,4 +11,5 @@ from .config import (
     get_config_4M,
     get_config_20M,
     get_config_90M,
+    get_config_90M_noT,
 )

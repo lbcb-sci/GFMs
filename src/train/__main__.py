@@ -2,7 +2,7 @@ import torch
 import pprint
 import argparse
 
-from src.utils import get_logger, get_config_4M, get_config_20M, get_config_90M
+from src.utils import get_logger, get_config_4M, get_config_20M, get_config_90M, get_config_90M_noT
 from .train import train
 
 def main() -> None:
@@ -13,7 +13,7 @@ def main() -> None:
 
         case '90M': 
             logger.info(' using 90M parameters config')
-            args = get_config_90M()
+            args = get_config_90M_noT()
 
         case '20M': 
             logger.info(' using 20M parameters config')

@@ -103,6 +103,16 @@ def get_config_90M() -> dict:
     return config
 
 
+def get_config_90M_noT() -> dict:
+    '''Get config with a 90M params BERT model, but without the Transformer layers.'''
+    config = base.copy()
+    config['bertconfig'] = BertConfig(
+        num_hidden_layers=0,
+        vocab_size=0
+    )
+    return config
+
+
 def get_config_20M() -> dict:
     '''Get config with a 20M params BERT model.'''
     config = base.copy()
