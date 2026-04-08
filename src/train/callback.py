@@ -1,9 +1,36 @@
+import time
 import torch
+import wandb
 from collections import defaultdict
-from transformers import TrainerState, TrainerControl, TrainingArguments
-from transformers.integrations import WandbCallback
+from transformers import TrainerCallback, TrainerState, TrainerControl, TrainingArguments
 
-class FisherCallback(WandbCallback):
+
+class ThroughputCallback(TrainerCallback):
+    def __init__(self, max_length: int):
+        self.max_length = max_length
+        self._t0 = None
+        self._steps0 = None
+
+    def on_train_begin(self, args, state, control, **kwargs):
+        self._t0 = time.time()
+        self._steps0 = state.global_step
+
+    def on_evaluate(
+        self,
+        args: TrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        **kwargs,
+    ):
+        elapsed = time.time() - self._t0
+        steps = state.global_step - self._steps0
+        tokens_per_sec = steps * args.per_device_train_batch_size * self.max_length / elapsed
+        wandb.log({'throughput/tokens_per_second': tokens_per_sec, 'train/global_step': state.global_step})
+        self._t0 = time.time()
+        self._steps0 = state.global_step
+
+
+class FisherCallback(TrainerCallback):
     def __init__(
         self,
         keys: list[str],
@@ -66,7 +93,7 @@ class FisherCallback(WandbCallback):
 
     def _log_to_wandb(self, group_fisher: dict[str, float], step: int):
         data = {f"fisher/{key}": val for key, val in group_fisher.items()}
-        self._wandb.log(data, step=step)
+        wandb.log({**data, 'train/global_step': step})
 
     def on_evaluate(
         self,
