@@ -15,7 +15,7 @@ from .tokenizer import train_bpe_tokenizer, load_6mer_tokenizer, make_iterator_t
 from src.utils import count_parameters, get_run_path, get_training_args
 from src.utils.paths import PATHS
 from .data import get_dataset_text
-from .callback import FisherCallback
+from .callback import FisherCallback, ThroughputCallback
 
 
 def train(type: str, **args) -> None:
@@ -188,7 +188,7 @@ def _train(
             data_collator=collator,
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
-            callbacks=[FisherCallback(keys=keys, batch_size=args['batch_size'])]
+            callbacks=[FisherCallback(keys=keys, batch_size=args['batch_size']), ThroughputCallback(max_length=args['max_length'])]
         )
 
         output_init = save_path / str(seed) / 'init'
