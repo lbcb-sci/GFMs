@@ -163,7 +163,7 @@ def _train(
         set_seed(seed); random.seed(seed); numpy.random.seed(seed)
         torch.manual_seed(seed); torch.cuda.manual_seed_all(seed)
 
-        time_start = datetime.now().strftime('%y-%m-%d_%H%M%S')
+        time_start = datetime.now().strftime('%y-%m-%d_%H-%M-%S')
         logger.info(f' training of model with seed {seed} started at {time_start}')
 
         collator = DataCollatorForLanguageModeling(
@@ -220,7 +220,7 @@ def _train(
         with open(output_trained / 'configuration.txt', 'w') as c: c.write(str(args))
         logger.info(f' saved trained model at {output_trained}')
 
-        time_end = datetime.now().strftime('%y-%m-%d_%H%M%S')
+        time_end = datetime.now().strftime('%y-%m-%d_%H-%M-%S')
         logger.info(f' training of model with seed {seed} started at {time_start} and ended at {time_end}')
 
         wandb.finish()
