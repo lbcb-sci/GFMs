@@ -65,10 +65,11 @@ def get_training_args(run_name: str, seed: int, **args):
         data_seed=42, # non-deterministic dataloader, put 42 for deterministic
     )
 
+N = 5
 
 # base configuration for training on 1b tokens
 base = {
-    'N': 5,    # number of models to train
+    'N': N,    # number of models to train
     'kmer': 6, # vocab size = 4**kmer + special tokens
     'epochs': 5,
     'batch_size': 96,
@@ -79,7 +80,7 @@ base = {
 }
 
 _test = { # very small config for testing
-    'N': 4,
+    'N': N,
     'kmer': 6,
     'epochs': 2,
     'batch_size': 16,
