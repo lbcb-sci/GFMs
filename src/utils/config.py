@@ -62,7 +62,7 @@ def get_training_args(run_name: str, seed: int, **args):
 
         # seeds (random model init but not data)
         seed=seed,
-        data_seed=42, # non-deterministic dataloader, put 42 for determnistic
+        data_seed=42, # non-deterministic dataloader, put 42 for deterministic
     )
 
 
