@@ -1,1 +1,1 @@
-from .fisher import analyze_fisher
+from .fisher import fisher

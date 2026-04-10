@@ -1,139 +1,124 @@
-import os
 import argparse
-from pathlib import Path
 from pprint import pprint
 from transformers import BertConfig, BertForMaskedLM, AutoTokenizer
-import matplotlib.pyplot as plt
 
-from src.utils import get_logger, count_parameters
-
-from src.analyze.distributions import analyze_distributions
-from src.analyze.static import analyze_word_embeddings
-from src.analyze.fisher import analyze_fisher
-from src.analyze.attention import analyze_attention
+import src.analyze as analyze
+from src.analyze.plotting import *
+from src.utils import get_logger, count_parameters, DATA_TOKENIZER_PAIRS
 
 def main() -> None:
     args = parse_args()
 
-    logger = get_logger('<analyze>')
-    args.logger = logger
-    logger.info(f' args: {args}')
+    logger = get_logger('<analyze>'); args.logger = logger
 
+    logger.info(f' args: {args}')
     logger.info(f' running on device {args.device}')
 
-    models = load_models(args)
-    models = {str(k).replace('runs/', ''): v for k, v in models.items()}
+    paths = get_huggingface_paths()
+    tokenizers = load_tokenizers(paths)
+    models = load_models(paths, args.device)
+    check_models(models, args.logger)
 
     match args.type:
 
         case 'static': 
             logger.info(' running word-embeddings analysis...')
-            results = analyze_word_embeddings(models, logger)
+            results = analyze.word_embeddings(models, logger)
             logger.info(' word-embeddings analysis done.\n')
             pprint(results)
 
-        case 'distributions': 
+        case 'fisher': 
+            logger.info(' running fisher information analysis...')
+            results = analyze.fisher(models, tokenizers, args)
+            logger.info(' fisher information analysis done.\n')
+            pprint(results)
+            plot_fisher(results)
+
+        case 'distribution': 
             logger.info(' running distributions analysis...')
-            tokenizer = load_tokenizer(args)
-            results = analyze_distributions(
-                models, tokenizer, logger,
-                n_samples=args.samples,
-                batch_size=args.batch_size,
-            )
+            results = analyze.distributions(models, tokenizers, args)
             logger.info(' distributions analysis done\n')
             pprint(results)
-
-        case 'fisher':
-            logger.info(' running fisher analysis...')
-            tokenizer = load_tokenizer(args)
-            results = analyze_fisher(
-                models, tokenizer, logger,
-                n_samples=args.samples,
-                batch_size=args.batch_size,
-            )
-            logger.info(' fisher analysis done\n')
-            #pprint(results)
-
-            for run in results.keys():
-
-                print(results[run]['encoder_dominance'])
-
-                max_layer = ''
-                maxval = float('-inf')
-                for layer, val in results[run]['fisher'][0].items(): 
-                    if val > maxval:
-                        max_layer = layer
-                        maxval = val
-
-                print(max_layer)
-                print(maxval)
-
-                fig, ax = plt.subplots(4, figsize=(30, 15))
-                for i, model in enumerate(results[run]['fisher'].values()):
-                    ax[i].bar(list(model.keys()), list(model.values()), color='red' if 'dna' in run else 'blue')
-                    ax[i].tick_params(axis='y', left=False, labelleft=False)
-                    ax[i].tick_params(rotation=45)
-                    if i < 3: ax[i].tick_params(axis='x', labelbottom=False)
-
-                fig.suptitle(run)
-
-                plt.tight_layout()
-                plt.savefig(f'{run}.png', dpi=400)
-                plt.close()
-
-        case 'attention':
-            logger.info(' running attention analysis...')
-            tokenizer = load_tokenizer(args)
-            results = analyze_attention(
-                models, tokenizer, logger,
-                n_samples=args.samples,
-                batch_size=args.batch_size,
-            )
-            logger.info(' attention analysis done\n')
-            pprint(results)
+            plot_distributions(results)
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Analyze the trained models.')
-    parser.add_argument('--type', type=str, required=True, 
-                        choices=['static', 'distributions', 'fisher', 'attention'])
-    parser.add_argument('--runs', type=str, nargs='+', required=True)
+
+    parser.add_argument('--type', type=str, required=True, choices=['static', 'distribution', 'fisher'])
     parser.add_argument('--device', type=str, choices=['cpu', 'cuda'], default='cuda')
     parser.add_argument('--samples', type=int, default=256)
     parser.add_argument('--batch_size', type=int, default=8)
+
     return parser.parse_args()
 
-def load_tokenizer(args):
-    run = Path(args.runs[0])
-    tokenizers = os.listdir(run)
-    path = run / tokenizers[0]
-    tokenizer = AutoTokenizer.from_pretrained(path, local_files_only=True)
-    return tokenizer
+def get_huggingface_paths() -> list[str]:
+    N = 5; username = 'mrochk'
+    result = {'text': {'bpe': []}, 'dna': {'bpe': [], 'kmer': []}}
 
-def load_models(args) -> dict:
-    logger = args.logger
-    device = args.device
-    runs = [Path(run) for run in args.runs]
+    for data, tok in DATA_TOKENIZER_PAIRS:
+        for idx in range(1, N+1):
+            path = f'{username}/bert-90M-{data}-{tok}-{idx}'
+            result[data][tok].append(path)
 
-    paths = {}
-    for run in runs:
-        models = os.listdir(run)
-        nmodels = len(models)
-        logger.info(f' run [{run}] has {nmodels} models')
-        paths[run] = [run / model for model in models]
+    return result
 
-    models = {}
-    for run, models_path in paths.items():
-        models[run] = []
-        for model_path in models_path:
+def load_tokenizers(paths: dict) -> dict:
+    return {
+        'text': {'bpe': [AutoTokenizer.from_pretrained(path) for path in paths['text']['bpe']]},
+        'dna': {
+            'bpe': [AutoTokenizer.from_pretrained(path) for path in paths['dna']['bpe']],
+            'kmer': [AutoTokenizer.from_pretrained(path) for path in paths['dna']['kmer']],
+        }
+    }
 
-            config = BertConfig.from_pretrained(model_path, local_files_only=True)
-            config.output_attentions = True # output attention scores
+def load_models(paths: dict, device) -> dict:
+    models = {'text': {'bpe': []}, 'dna': {'bpe': [], 'kmer': []}}
 
-            model = BertForMaskedLM.from_pretrained(model_path, config=config, device_map=device)
-
-            logger.info(f' model [{model_path}] has {count_parameters(model):,} parameters')
-            models[run].append(model)
+    for data, tok in DATA_TOKENIZER_PAIRS:
+        for path in paths[data][tok]:
+            config = BertConfig.from_pretrained(path)
+            config.output_attentions = True 
+            config.output_hidden_states = True
+            model = BertForMaskedLM.from_pretrained(path, config=config, device_map=device).eval()
+            models[data][tok].append(model)
 
     return models
+
+def check_models(models: dict, logger) -> None:
+    for model in models['text']['bpe']:
+        logger.info(f' model [{model.name_or_path}] has {count_parameters(model):,} parameters')
+
+    for model in models['dna']['bpe']:
+        logger.info(f' model [{model.name_or_path}] has {count_parameters(model):,} parameters')
+
+    for model in models['dna']['kmer']:
+        logger.info(f' model [{model.name_or_path}] has {count_parameters(model):,} parameters')
+
+def plot_fisher(results):
+    text = results['text']['bpe']['fisher']
+    dna_bpe = results['dna']['bpe']['fisher']
+    dna_kmer = results['dna']['kmer']['fisher']
+
+    plot_fisher_information(text, dna_bpe, dna_kmer)
+
+    text_full = results['text']['bpe']['fisher_full']
+    dna_bpe_full = results['dna']['bpe']['fisher_full']
+    dna_kmer_full = results['dna']['kmer']['fisher_full']
+
+    plot_full_fisher_information(text_full, dna_bpe_full, dna_kmer_full)
+
+def plot_distributions(results):
+    text_js = results['text']['bpe']['js']
+    dna_bpe_js = results['dna']['bpe']['js']
+    dna_kmer_js = results['dna']['kmer']['js']
+    plot_jensen_shannon(text_js, dna_bpe_js, dna_kmer_js)
+
+    n_text = 10
+    n_dna = 50
+
+    text_mean_dist = results['text']['bpe']['mean_dist'][:n_text]
+    dna_bpe_mean_dist = results['dna']['bpe']['mean_dist'][:n_dna]
+    dna_kmer_mean_dist = results['dna']['kmer']['mean_dist'][:n_dna]
+    plot_average_distribution(text_mean_dist, dna_bpe_mean_dist, dna_kmer_mean_dist)
 
 if __name__ == '__main__': main()
