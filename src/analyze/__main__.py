@@ -15,8 +15,11 @@ def main() -> None:
     logger.info(f' running on device {args.device}')
 
     paths = get_huggingface_paths()
+
     tokenizers = load_tokenizers(paths)
+
     models = load_models(paths, args.device)
+
     check_models(models, args.logger)
 
     match args.type:
@@ -41,10 +44,23 @@ def main() -> None:
             pprint(results)
             plot_distributions(results)
 
+        case 'attention':
+            logger.info(' running attention scores analysis...')
+            results = analyze.attention(models, tokenizers, args)
+            logger.info(' attention scores analysis done\n')
+            pprint(results)
+            plot_attention(results)
+
+        case 'activations':
+            logger.info(' running activations analysis...')
+            results = analyze.activations(models, tokenizers, args)
+            logger.info(' activations analysis done\n')
+            pprint(results)
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Analyze the trained models.')
 
-    parser.add_argument('--type', type=str, required=True, choices=['static', 'distribution', 'fisher'])
+    parser.add_argument('--type', type=str, required=True, choices=['static', 'distribution', 'fisher', 'attention', 'activations'])
     parser.add_argument('--device', type=str, choices=['cpu', 'cuda'], default='cuda')
     parser.add_argument('--samples', type=int, default=256)
     parser.add_argument('--batch_size', type=int, default=8)
@@ -64,10 +80,10 @@ def get_huggingface_paths() -> list[str]:
 
 def load_tokenizers(paths: dict) -> dict:
     return {
-        'text': {'bpe': [AutoTokenizer.from_pretrained(path) for path in paths['text']['bpe']]},
+        'text': {'bpe': [AutoTokenizer.from_pretrained(path, local_files_only=True) for path in paths['text']['bpe']]},
         'dna': {
-            'bpe': [AutoTokenizer.from_pretrained(path) for path in paths['dna']['bpe']],
-            'kmer': [AutoTokenizer.from_pretrained(path) for path in paths['dna']['kmer']],
+            'bpe': [AutoTokenizer.from_pretrained(path, local_files_only=True) for path in paths['dna']['bpe']],
+            'kmer': [AutoTokenizer.from_pretrained(path, local_files_only=True) for path in paths['dna']['kmer']],
         }
     }
 
@@ -79,7 +95,7 @@ def load_models(paths: dict, device) -> dict:
             config = BertConfig.from_pretrained(path)
             config.output_attentions = True 
             config.output_hidden_states = True
-            model = BertForMaskedLM.from_pretrained(path, config=config, device_map=device).eval()
+            model = BertForMaskedLM.from_pretrained(path, config=config, device_map=device, local_files_only=True).eval()
             models[data][tok].append(model)
 
     return models
@@ -93,6 +109,22 @@ def check_models(models: dict, logger) -> None:
 
     for model in models['dna']['kmer']:
         logger.info(f' model [{model.name_or_path}] has {count_parameters(model):,} parameters')
+
+def plot_attention(results):
+    text = results['text']['bpe']['mimatrix']
+    dna_bpe = results['dna']['bpe']['mimatrix']
+    dna_kmer = results['dna']['kmer']['mimatrix']
+    plot_attention_scores(text, dna_bpe, dna_kmer)
+
+    text = results['text']['bpe']['entropies']
+    dna_bpe = results['dna']['bpe']['entropies']
+    dna_kmer = results['dna']['kmer']['entropies']
+    plot_attention_entropies(text, dna_bpe, dna_kmer)
+
+    text     = results['text']['bpe']['mimatrix_full']
+    dna_bpe   = results['dna']['bpe']['mimatrix_full']
+    dna_kmer = results['dna']['kmer']['mimatrix_full']
+    plot_mi_matrix_full(text, dna_bpe, dna_kmer, 5, 12)
 
 def plot_fisher(results):
     text = results['text']['bpe']['fisher']

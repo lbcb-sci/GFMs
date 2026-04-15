@@ -18,7 +18,8 @@ def get_root_path() -> Path:
 
 
 def get_savedir_path() -> Path:
-    path = PATHS['savedir']
+    path = Path('/root/GFMs')
+    #path = PATHS['savedir']
     path.mkdir(exist_ok=True)
     return path
 

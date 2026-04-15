@@ -1,1 +1,1 @@
-from .attention import analyze_attention
+from .attention import attention

@@ -1,6 +1,5 @@
 import torch
-from datasets import load_dataset
-from torch.utils.data import Dataset
+from datasets import Dataset, load_dataset, concatenate_datasets
 from transformers import PreTrainedTokenizer
 
 class DeviceWrapper(Dataset):
@@ -21,11 +20,13 @@ def get_dataset(path: str, name: str, n: int) -> Dataset:
     dataset = load_dataset(path, name, split=f'train[-{n}:]')
     return dataset
 
-def get_dataset_dna(n: int = 2000) -> Dataset:
-    return get_dataset('zhangtaolab/plant-reference-genomes', name=None, n=n)
-
-def get_dataset_text(n: int = 2000) -> Dataset:
+def get_wikipedia(n: int) -> Dataset:
     return get_dataset('wikimedia/wikipedia', name='20231101.en', n=n)
+
+def get_opengenome(n: int) -> Dataset:
+    # workaround to get a single dataset
+    ds = concatenate_datasets(list(load_dataset('mrochk/opengenome-clean').values()))
+    return Dataset.from_dict({'text': ds['text'][:n]})
 
 def mlm_preprocess(batch, tokenizer: PreTrainedTokenizer, mask_prob: float):
     texts = batch['text']
