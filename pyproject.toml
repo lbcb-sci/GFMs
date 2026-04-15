@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "accelerate>=1.1.0",
+    "biopython>=1.87",
     "ckatorch>=1.0.2",
     "datasets>=4.5.0",
     "huggingface-hub>=1.3.4",
