@@ -1,7 +1,10 @@
 import torch
-from datasets import load_dataset
+from datasets import load_dataset, load_from_disk
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer
+
+from src.utils.paths import PATHS
+
 
 class DeviceWrapper(Dataset):
     '''Dummy wrapper to move stuff to cuda if needed.'''
@@ -16,16 +19,26 @@ class DeviceWrapper(Dataset):
         item = self.base[idx]
         return {k: (v.to(self.device) if torch.is_tensor(v) else v) for k, v in item.items()}
 
-def get_dataset(path: str, name: str, n: int) -> Dataset:
+def get_dataset(path: str, name: str, n: int, cache_dir: str = None) -> Dataset:
     # we index from the end to get unseen-during-training samples
-    dataset = load_dataset(path, name, split=f'train[-{n}:]')
+    dataset = load_dataset(path, name, split=f'train[-{n}:]', cache_dir=cache_dir)
     return dataset
 
-def get_dataset_dna(n: int = 2000) -> Dataset:
-    return get_dataset('zhangtaolab/plant-reference-genomes', name=None, n=n)
+# def get_dataset_dna(n: int = 2000) -> Dataset:
+#     return get_dataset('zhangtaolab/plant-reference-genomes', name=None, n=n)
 
-def get_dataset_text(n: int = 2000) -> Dataset:
-    return get_dataset('wikimedia/wikipedia', name='20231101.en', n=n)
+# def get_dataset_text(n: int = 2000) -> Dataset:
+#     return get_dataset('wikimedia/wikipedia', name='20231101.en', n=n)
+
+
+def get_dataset_text(n: int):
+    cache_dir = PATHS['cache_dir']
+    return get_dataset('wikimedia/wikipedia', '20231101.en', n, cache_dir=cache_dir )
+
+def get_dataset_dna(n: int):
+    preprocessed_path = PATHS['og2_dataset']
+    return load_from_disk(preprocessed_path).select(range(12_000_000-n, 12_000_000)) 
+
 
 def mlm_preprocess(batch, tokenizer: PreTrainedTokenizer, mask_prob: float):
     texts = batch['text']

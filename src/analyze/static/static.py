@@ -44,6 +44,12 @@ def word_embeddings(all_models: dict, logger) -> dict:
         results[data][tok]['disparities'] = m.meanstd(disparities)
         results[data][tok]['procrustes_cosine'] = m.meanstd(procrustes_cosine_similarities)
 
+        logger.info(f' computing linear cka...')
+        results[data][tok]['linear_cka'] = m.cka(embeddings, kernel='linear')
+
+        logger.info(f' computing rbf cka...')
+        results[data][tok]['rbf_cka'] = m.cka(embeddings, kernel='rbf')
+
     return results
 
 def extract_word_embeddings(models: list[BertForMaskedLM]) -> Tensor:

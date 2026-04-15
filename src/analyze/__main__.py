@@ -1,10 +1,12 @@
 import argparse
+from pathlib import Path
 from pprint import pprint
 from transformers import BertConfig, BertForMaskedLM, AutoTokenizer
 
 import src.analyze as analyze
 from src.analyze.plotting import *
 from src.utils import get_logger, count_parameters, DATA_TOKENIZER_PAIRS
+
 
 def main() -> None:
     args = parse_args()
@@ -14,9 +16,13 @@ def main() -> None:
     logger.info(f' args: {args}')
     logger.info(f' running on device {args.device}')
 
-    paths = get_huggingface_paths()
+    # paths = get_huggingface_paths()
+    paths = get_local_paths(shuffle=False)
+    pprint(paths)
+
     tokenizers = load_tokenizers(paths)
     models = load_models(paths, args.device)
+
     check_models(models, args.logger)
 
     match args.type:
@@ -26,6 +32,7 @@ def main() -> None:
             results = analyze.word_embeddings(models, logger)
             logger.info(' word-embeddings analysis done.\n')
             pprint(results)
+            print_results(results)
 
         case 'fisher': 
             logger.info(' running fisher information analysis...')
@@ -41,6 +48,7 @@ def main() -> None:
             pprint(results)
             plot_distributions(results)
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Analyze the trained models.')
 
@@ -50,6 +58,7 @@ def parse_args():
     parser.add_argument('--batch_size', type=int, default=8)
 
     return parser.parse_args()
+
 
 def get_huggingface_paths() -> list[str]:
     N = 5; username = 'mrochk'
@@ -62,6 +71,28 @@ def get_huggingface_paths() -> list[str]:
 
     return result
 
+
+def get_local_paths(shuffle: bool) -> dict:
+    N = 5
+    base = Path('/home/vrcekl/scratch/GFMs/analyze')
+    suffix = 'shuffle' if shuffle else 'nonshuffle'
+    result = {'text': {'bpe': []}, 'dna': {'bpe': [], 'kmer': []}}
+
+    for data, tok in DATA_TOKENIZER_PAIRS:
+        for idx in range(1, N + 1):
+            result[data][tok].append(base / f'{data}_{tok}_{suffix}' / str(idx))
+
+    return result
+
+
+def print_results(results: dict) -> None:
+    for data, tok in DATA_TOKENIZER_PAIRS:
+        print(data, tok)
+        print('-' * 20)
+        for metric, value in results[data][tok].items():
+            print(f'{metric}\t\t{value}')
+
+
 def load_tokenizers(paths: dict) -> dict:
     return {
         'text': {'bpe': [AutoTokenizer.from_pretrained(path) for path in paths['text']['bpe']]},
@@ -70,6 +101,7 @@ def load_tokenizers(paths: dict) -> dict:
             'kmer': [AutoTokenizer.from_pretrained(path) for path in paths['dna']['kmer']],
         }
     }
+
 
 def load_models(paths: dict, device) -> dict:
     models = {'text': {'bpe': []}, 'dna': {'bpe': [], 'kmer': []}}
@@ -84,6 +116,7 @@ def load_models(paths: dict, device) -> dict:
 
     return models
 
+
 def check_models(models: dict, logger) -> None:
     for model in models['text']['bpe']:
         logger.info(f' model [{model.name_or_path}] has {count_parameters(model):,} parameters')
@@ -93,6 +126,7 @@ def check_models(models: dict, logger) -> None:
 
     for model in models['dna']['kmer']:
         logger.info(f' model [{model.name_or_path}] has {count_parameters(model):,} parameters')
+
 
 def plot_fisher(results):
     text = results['text']['bpe']['fisher']
@@ -106,6 +140,7 @@ def plot_fisher(results):
     dna_kmer_full = results['dna']['kmer']['fisher_full']
 
     plot_full_fisher_information(text_full, dna_bpe_full, dna_kmer_full)
+
 
 def plot_distributions(results):
     text_js = results['text']['bpe']['js']
