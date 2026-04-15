@@ -160,7 +160,7 @@ def nmi(p_bins, q_bins):
         num_bins = int(bins.max().item()) + 1
         probs = torch.bincount(bins, minlength=num_bins).float() / bins.numel()
         nz = probs > 0
-        return -torch.sum(probs[nz] * torch.log(probs[nz])).item()
+        return -torch.sum(probs[nz] * torch.log(probs[nz]))
 
     hx = marginal_entropy(p_bins)
     hy = marginal_entropy(q_bins)
