@@ -9,5 +9,6 @@ PATHS = {
     'checkpoints':        _scratch / 'checkpoints',
     'savedir':            _scratch,
     'og2_dataset':        _data / 'opengenome2_subset/preprocessed_12M_uppercase',
+    'ensembl_cdna_chunks': _scratch / 'ensembl_cdna_chunks_4096',
     'cache_dir':          _data,
 }

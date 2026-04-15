@@ -11,8 +11,8 @@ from transformers import DataCollatorForLanguageModeling, Trainer, set_seed
 
 from datasets import load_from_disk
 
-from src.train.tokenizer.tokenizer import clean_dna
-from .tokenizer import train_bpe_tokenizer, load_6mer_tokenizer, make_iterator_text, make_iterator_dna, clean_text
+# from src.train.tokenizer.tokenizer import clean_dna
+from .tokenizer import train_bpe_tokenizer, load_6mer_tokenizer, make_iterator_text, make_iterator_dna, clean_text, clean_dna
 from src.utils import count_parameters, get_run_path, get_training_args
 from src.utils.paths import PATHS
 from .data import get_dataset_text
@@ -86,7 +86,8 @@ def train(type: str, **args) -> None:
         logger.info(f' shortest tokenized evaluation example has {min([len(s) for s in eval_encoded["input_ids"]])} tokens\n')
 
     else:
-        preprocessed_path = PATHS['og2_dataset']  # '/mnt/sod2-project/csb4/wgs/lovro/huggingface/opengenome2_subset/preprocessed_12M_uppercase'
+        # preprocessed_path = PATHS['og2_dataset']
+        preprocessed_path = PATHS['ensembl_cdna_chunks']
         logger.info(f' loading preprocessed DNA dataset from {preprocessed_path}')
 
         dataset_full = load_from_disk(preprocessed_path)
@@ -201,15 +202,6 @@ def _train(
         trainer.save_model(output_dir=output_init)
         with open(output_init / 'configuration.txt', 'w') as c: c.write(str(args))
         logger.info(f' saved initialized model at {output_init}')
-
-        # return trainer
-
-        # from itertools import islice
-        # train_dl = trainer.get_train_dataloader()
-        # for i, batch in enumerate(islice(train_dl, 3)):
-        #     print(f"\n=== Batch {i} ===")
-        #     print(type(batch))
-        #     print(batch.keys() if isinstance(batch, dict) else "not a dict")
 
         logger.info(f' starting the training of model #{seed}...')
         trainer.train()
