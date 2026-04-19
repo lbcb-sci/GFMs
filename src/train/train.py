@@ -38,21 +38,29 @@ def train(type: str, **args) -> None:
     logger.info(' getting tokenizer...')
 
     if is_text:
-        dataset_train, dataset_eval = get_dataset_text(3*train_size, 3*eval_size)
-        logger.info(f' loaded text dataset with {len(dataset_train):,} training and {len(dataset_eval):,} evaluation examples')
+        preprocessed_path = PATHS['wiki_dataset']
+        logger.info(f' loading preprocessed text dataset from {preprocessed_path}')
 
-        dataset_train = dataset_train.map(lambda x: {'length': len(x['text'])})
-        dataset_train = dataset_train.sort('length', reverse=True).select(range(train_size))
-        
-        dataset_eval = dataset_eval.map(lambda x: {'length': len(x['text'])})
-        dataset_eval = dataset_eval.sort('length', reverse=True).select(range(eval_size))
-        
-        logger.info(f' filtered text dataset to {len(dataset_train):,} training and {len(dataset_eval):,} evaluation examples with longest texts')
-        logger.info(f' shortest training example has {min(dataset_train["length"])} characters, longest has {max(dataset_train["length"])} characters')
-        logger.info(f' shortest evaluation example has {min(dataset_eval["length"])} characters, longest has {max(dataset_eval["length"])} characters')
+        dataset_full = load_from_disk(preprocessed_path)
+        dataset_train = dataset_full.select(range(train_size))
+        dataset_eval  = dataset_full.select(range(train_size, train_size + eval_size))
 
-        dataset_train = dataset_train.remove_columns('length')
-        dataset_eval = dataset_eval.remove_columns('length')
+
+        # dataset_train, dataset_eval = get_dataset_text(3*train_size, 3*eval_size)
+        # logger.info(f' loaded text dataset with {len(dataset_train):,} training and {len(dataset_eval):,} evaluation examples')
+
+        # dataset_train = dataset_train.map(lambda x: {'length': len(x['text'])})
+        # dataset_train = dataset_train.sort('length', reverse=True).select(range(train_size))
+        
+        # dataset_eval = dataset_eval.map(lambda x: {'length': len(x['text'])})
+        # dataset_eval = dataset_eval.sort('length', reverse=True).select(range(eval_size))
+        
+        # logger.info(f' filtered text dataset to {len(dataset_train):,} training and {len(dataset_eval):,} evaluation examples with longest texts')
+        # logger.info(f' shortest training example has {min(dataset_train["length"])} characters, longest has {max(dataset_train["length"])} characters')
+        # logger.info(f' shortest evaluation example has {min(dataset_eval["length"])} characters, longest has {max(dataset_eval["length"])} characters')
+
+        # dataset_train = dataset_train.remove_columns('length')
+        # dataset_eval = dataset_eval.remove_columns('length')
 
         text_bpe_path = PATHS['text_bpe_tokenizer']  # Path('/home/vrcekl/scratch/GFMs/bpe_text_tokenizer')
         if text_bpe_path.exists():
@@ -78,7 +86,11 @@ def train(type: str, **args) -> None:
             cleaned = [clean_text(t) for t in batch["text"]]
             return tokenizer(cleaned, truncation=True, max_length=args["max_length"], padding=False)
 
-        remove = ['text', 'url', 'id', 'title']
+        remove = ['text']
+        if 'url' in dataset_train.column_names: remove.append('url')
+        if 'id' in dataset_train.column_names: remove.append('id')
+        if 'title' in dataset_train.column_names: remove.append('title')
+
         train_encoded = dataset_train.map(preprocess, batched=True, remove_columns=remove)
         eval_encoded  = dataset_eval.map( preprocess, batched=True, remove_columns=remove)
 
