@@ -1,6 +1,5 @@
 import torch
-from datasets import load_dataset, load_from_disk
-from torch.utils.data import Dataset
+from datasets import Dataset, load_dataset, load_from_disk, concatenate_datasets
 from transformers import PreTrainedTokenizer
 
 from src.utils.paths import PATHS
@@ -39,6 +38,14 @@ def get_dataset_dna(n: int):
     preprocessed_path = PATHS['og2_dataset']
     return load_from_disk(preprocessed_path).select(range(12_000_000-n, 12_000_000)) 
 
+
+def get_wikipedia(n: int) -> Dataset:
+    return get_dataset('wikimedia/wikipedia', name='20231101.en', n=n)
+
+def get_opengenome(n: int) -> Dataset:
+    # workaround to get a single dataset
+    ds = concatenate_datasets(list(load_dataset('mrochk/opengenome-clean').values()))
+    return Dataset.from_dict({'text': ds['text'][:n]})
 
 def mlm_preprocess(batch, tokenizer: PreTrainedTokenizer, mask_prob: float):
     texts = batch['text']

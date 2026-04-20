@@ -270,3 +270,103 @@ def plot_jensen_shannon(text_js, dna_bpe_js, dna_kmer_js):
     plt.tight_layout()
     plt.savefig(get_plots_path() / 'js.pdf')
     plt.close()
+
+def plot_attention_entropies(text, dna_bpe, dna_kmer):
+    fig, ax = plt.subplots(1, figsize=(7, 7))
+
+    x = list(sorted(list(text.keys())))
+
+    ytext     = [text[l].item() for l in x]
+    ydna_bpe  = [dna_bpe[l].item() for l in x]
+    ydna_kmer = [dna_kmer[l].item() for l in x]
+
+    minval = min([min(ytext), min(ydna_bpe), min(ydna_kmer)]) - 0.1
+    maxval = max([max(ytext), max(ydna_bpe), max(ydna_kmer)]) + 0.1
+
+    ax.set_ylim((minval, maxval))
+
+    ax.plot(x, ytext, color=COLOR_TEXT, label='Text')
+    ax.scatter(x, ytext, color=COLOR_TEXT)
+
+    ax.plot(x, ydna_bpe, color=COLOR_DNA_BPE, label='DNA (BPE)')
+    ax.scatter(x, ydna_bpe, color=COLOR_DNA_BPE)
+
+    ax.plot(x, ydna_kmer, color=COLOR_DNA_BPE, linestyle='--', label='DNA (k-mer)')
+    ax.scatter(x, ydna_kmer, color=COLOR_DNA_BPE)
+
+    ax.set_xlabel('Transformer Layer')
+    ax.set_ylabel('Mean Entropy')
+
+    ax.legend()
+
+    fig.tight_layout()
+    fig.savefig(get_plots_path() / 'attn_entropy.pdf')
+
+def plot_attention_scores(text, dna_bpe, dna_kmer):
+    fig, axes = plt.subplots(3, figsize=(10, 22))
+
+    minval = 0.0
+    maxval = max([text.max(), dna_bpe.max(), dna_kmer.max()])+0.1
+
+    for ax, matrix, title in zip(axes, [text, dna_bpe, dna_kmer],
+        ['Text', "DNA (BPE)", "DNA (KMER)"]):
+    
+        sns.heatmap(
+            matrix, 
+            annot=True, 
+            fmt='.2f', 
+            cmap='viridis', 
+            vmin=minval, vmax=maxval,
+            ax=ax,
+            xticklabels=[f"L{(j+1)}" for j in range(matrix.shape[1])], 
+            yticklabels=[f"L{(i+1)}" for i in range(matrix.shape[0])],
+        )
+
+        ax.set_title(title)
+
+    #fig.suptitle('Mutual Information (MI) Between Attention Scores')
+    fig.tight_layout()
+    fig.savefig(get_plots_path() / 'attn.pdf')
+
+def plot_mi_matrix_full(mim_text, mim_dna_bpe, mim_dna_kmer, num_models, num_layers, model_names=None):
+    if model_names is None:
+        model_names = [f"M{i+1}" for i in range(num_models)]
+
+    matrices = [mim_text, mim_dna_bpe, mim_dna_kmer]
+    titles = ['Text', 'DNA BPE', 'DNA k-mer']
+
+    tick_positions = [l * num_models + m for l in range(num_layers) for m in range(num_models)]
+    tick_labels = [f"{model_names[m]}L{l+1}" for l in range(num_layers) for m in range(num_models)]
+
+    # Shared color scale across all 3 matrices
+    vmin = min(m.min() for m in matrices)
+
+    vmax = 0.0
+    for i in range(mim_text.shape[0]):
+        for j in range(mim_text.shape[1]):
+            if i == j: continue
+            if mim_text[i, j] > vmax: vmax = mim_text[i, j]
+
+    vmax += 0.1
+
+    fig, axes = plt.subplots(3, 1, figsize=(12, 28))
+
+    for ax, matrix, title in zip(axes, matrices, titles):
+        im = ax.imshow(matrix, aspect='auto', cmap='viridis', vmin=vmin, vmax=vmax)
+        plt.colorbar(im, ax=ax, label='MI Score')
+
+        ax.set_xticks(tick_positions)
+        ax.set_xticklabels(tick_labels, rotation=90, fontsize=7)
+        ax.set_yticks(tick_positions)
+        ax.set_yticklabels(tick_labels, fontsize=7)
+
+        for l in range(1, num_layers):
+            pos = l * num_models - 0.5
+            ax.axhline(pos, color='white', linewidth=0.8, linestyle='--')
+            ax.axvline(pos, color='white', linewidth=0.8, linestyle='--')
+
+        ax.set_title(f'MI Matrix — {title}')
+
+    plt.tight_layout()
+    plt.savefig(get_plots_path() / 'mi_matrix_full.pdf', dpi=400)
+    #plt.show()

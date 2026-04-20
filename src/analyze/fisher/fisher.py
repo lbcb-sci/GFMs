@@ -7,7 +7,7 @@ from collections import defaultdict
 from torch.utils.data import DataLoader
 from transformers import BertForMaskedLM
 
-from src.analyze.data import mlm_preprocess, get_dataset_dna, get_dataset_text, DeviceWrapper
+from src.analyze.data import mlm_preprocess, get_opengenome, get_wikipedia, DeviceWrapper
 from src.utils import create_results_dict, DATA_TOKENIZER_PAIRS
 
 def fisher(all_models: dict, tokenizers: dict, args) -> dict:
@@ -26,7 +26,7 @@ def fisher(all_models: dict, tokenizers: dict, args) -> dict:
         is_text = 'text' in tokenizer.name_or_path
 
         logger.info(f' collecting dataset {"text" if is_text else "dna"}...')
-        dataset = get_dataset_text(n_samples) if is_text else get_dataset_dna(n_samples)
+        dataset = get_wikipedia(n_samples) if is_text else get_opengenome(n_samples)
         remove = ['text', 'url', 'id', 'title'] if is_text else ['text']
 
         logger.info( 'masking tokens in dataset...')
