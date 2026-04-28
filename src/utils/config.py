@@ -71,12 +71,12 @@ N = 5
 base = {
     'N': N,    # number of models to train
     'kmer': 6, # vocab size = 4**kmer + special tokens
-    'epochs': 5,
+    'epochs': 10,
     'batch_size': 96,
     'max_length': 512,
     'eval_size': 10_000,
-    'train_size': 2_000_000,
-    # 5 * 512 * 2M ~ 5b tokens
+    'train_size': 1_000_000,
+    # 10 * 512 * 2M ~ 10b target tokens; smaller datasets now fall back to their available size.
 }
 
 _test = { # very small config for testing

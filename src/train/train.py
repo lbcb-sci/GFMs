@@ -19,6 +19,33 @@ from .data import get_dataset_text
 from .callback import FisherCallback, ThroughputCallback
 
 
+def load_saved_dataset(path: str | Path, train_size: int, eval_size: int, logger):
+    dataset_full = load_from_disk(path)
+    dataset_size = len(dataset_full)
+    required_size = train_size + eval_size
+
+    if dataset_size == 0:
+        logger.fatal(f' dataset at {path} is empty')
+        exit(1)
+
+    if dataset_size == 1:
+        logger.fatal(f' dataset at {path} has only one row, cannot create both train and eval splits')
+        exit(1)
+
+    actual_eval_size = min(eval_size, dataset_size - 1)
+    actual_train_size = min(train_size, dataset_size - actual_eval_size)
+
+    if dataset_size < required_size:
+        logger.warning(
+            f' dataset at {path} has {dataset_size:,} rows, below the requested {required_size:,}; '
+            f'using {actual_train_size:,} rows for training and {actual_eval_size:,} for evaluation instead'
+        )
+
+    dataset_train = dataset_full.select(range(actual_train_size))
+    dataset_eval = dataset_full.select(range(actual_train_size, actual_train_size + actual_eval_size))
+    return dataset_train, dataset_eval
+
+
 def train(type: str, **args) -> None:
     is_text = type == 'text'
 
@@ -41,9 +68,7 @@ def train(type: str, **args) -> None:
         preprocessed_path = PATHS['wiki_dataset']
         logger.info(f' loading preprocessed text dataset from {preprocessed_path}')
 
-        dataset_full = load_from_disk(preprocessed_path)
-        dataset_train = dataset_full.select(range(train_size))
-        dataset_eval  = dataset_full.select(range(train_size, train_size + eval_size))
+        dataset_train, dataset_eval = load_saved_dataset(preprocessed_path, train_size, eval_size, logger)
 
 
         # dataset_train, dataset_eval = get_dataset_text(3*train_size, 3*eval_size)
@@ -99,12 +124,10 @@ def train(type: str, **args) -> None:
 
     else:
         # preprocessed_path = PATHS['og2_dataset']
-        preprocessed_path = PATHS['ensembl_cdna_chunks']
+        preprocessed_path = Path(args['dna_dataset_path']) if args.get('dna_dataset_path') else PATHS['ensembl_cdna_chunks']
         logger.info(f' loading preprocessed DNA dataset from {preprocessed_path}')
 
-        dataset_full = load_from_disk(preprocessed_path)
-        dataset_train = dataset_full.select(range(train_size))
-        dataset_eval  = dataset_full.select(range(train_size, train_size + eval_size))
+        dataset_train, dataset_eval = load_saved_dataset(preprocessed_path, train_size, eval_size, logger)
 
         if tokenizer_name == 'bpe':
             dna_bpe_path = PATHS['dna_bpe_tokenizer']  # Path('/home/vrcekl/scratch/GFMs/bpe_dna_tokenizer')
@@ -166,12 +189,20 @@ def _train(
     logger = args['logger']
     logger.info(f' model config: {bertconfig}')
     N = args['N']
-    save_path = get_run_path(prefix, args['tokenizer_name'], description=args.get('description'))
+    args = args.copy()
+    explicit_seed = args.pop('seed', None)
+    run_description = args.get('description')
+    if explicit_seed is not None:
+        run_description = f'{run_description}_seed{explicit_seed}' if run_description else f'seed{explicit_seed}'
+
+    save_path = get_run_path(prefix, args['tokenizer_name'], description=run_description)
 
     # last_ckpt = get_last_("")
     # print(f'Resumingf from:', last_ckpt)
 
-    for seed in range(1, N+1):  # train N models with different seeds
+    seeds = [explicit_seed] if explicit_seed is not None else range(1, N + 1)
+
+    for seed in seeds:  # train N models with different seeds, or a single requested seed
         # making sure model gets different initialization every time!
         set_seed(seed); random.seed(seed); numpy.random.seed(seed)
         torch.manual_seed(seed); torch.cuda.manual_seed_all(seed)

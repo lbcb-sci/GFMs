@@ -1,4 +1,5 @@
 import torch
+from pathlib import Path
 from datasets import Dataset, load_dataset, load_from_disk, concatenate_datasets
 from transformers import PreTrainedTokenizer
 
@@ -36,7 +37,7 @@ def get_dataset_text(n: int):
 
 def get_dataset_dna(n: int):
     preprocessed_path = PATHS['og2_dataset']
-    return load_from_disk(preprocessed_path).select(range(12_000_000-n, 12_000_000)) 
+    return get_local_dataset(preprocessed_path, n)
 
 
 def get_wikipedia(n: int) -> Dataset:
@@ -46,6 +47,20 @@ def get_opengenome(n: int) -> Dataset:
     # workaround to get a single dataset
     ds = concatenate_datasets(list(load_dataset('mrochk/opengenome-clean').values()))
     return Dataset.from_dict({'text': ds['text'][:n]})
+
+
+def get_local_dataset(path: str | Path, n: int) -> Dataset:
+    dataset = load_from_disk(path)
+    if len(dataset) < n:
+        raise ValueError(f'Dataset at {path} has only {len(dataset):,} rows, but {n:,} were requested.')
+    start = len(dataset) - n
+    return dataset.select(range(start, len(dataset)))
+
+
+def get_dna_eval_dataset(n: int, dataset_path: str | Path | None = None) -> Dataset:
+    if dataset_path:
+        return get_local_dataset(dataset_path, n)
+    return get_opengenome(n)
 
 def mlm_preprocess(batch, tokenizer: PreTrainedTokenizer, mask_prob: float):
     texts = batch['text']

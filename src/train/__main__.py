@@ -26,6 +26,8 @@ def main() -> None:
     args['logger'] = logger
     args['tokenizer_name'] = cmdargs.tokenizer
     args['description'] = cmdargs.description
+    args['dna_dataset_path'] = cmdargs.dna_dataset_path
+    args['seed'] = cmdargs.seed
 
     logger.info(f' training on {cmdargs.type}')
     logger.info(f' training on {args["epochs"]*args["train_size"]*args["max_length"]:,} tokens')
@@ -44,6 +46,10 @@ def parse_cmdline_args():
                         choices=['4M', '20M', '90M'], help='what bert config to use [small, medium, large]')
     parser.add_argument('--description', type=str, required=False, default=None,
                         help='optional description to add to the run path')
+    parser.add_argument('--dna-dataset-path', type=str, required=False, default=None,
+                        help='optional path to a HuggingFace DNA dataset saved with save_to_disk; overrides the default DNA dataset')
+    parser.add_argument('--seed', type=int, required=False, default=None,
+                        help='optional explicit seed; when set, train only the model for that seed')
     return parser.parse_args()
 
 if __name__ == '__main__': main()

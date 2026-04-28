@@ -23,6 +23,20 @@ There are two main modules in `src`: `train` and `analyze`. They should be calle
 
 You can directly jump to the analysis section if you're not interested in training from scratch.
 
+### ncRNA Dataset
+
+If you already downloaded Ensembl release 115 ncRNA FASTA files into `data/ensembl/release-115/ncrna/raw`, you can build a project-compatible DNA dataset with:
+
+```bash
+uv run scripts/download_ensembl_ncrna.py \
+	--local-only \
+	--output-dir data/ensembl/release-115/ncrna/raw \
+	--dataset-output scratch/ensembl_ncrna_chunks_4096 \
+	--chunk-size 4096
+```
+
+This mirrors the cDNA preprocessing used in the repo: sequences are cleaned, chunked into 4096 nucleotides, and trailing partial chunks are dropped by default. All downloaded ncRNA FASTA files are kept and included in the dataset build.
+
 ### Configuration
 
 The configuration of the models can be set in `src/utils/config.py`. 
@@ -33,6 +47,13 @@ First, you will need to train the models:
 ```bash
 uv run -m src.train --type {text, dna} --tokenizer {bpe, kmer} --size {4M, 20M, 90M}
 # all other hyperparams can be set in the utils/config.py file
+```
+
+To train on the ncRNA dataset instead of the default cDNA dataset, pass the dataset path explicitly:
+
+```bash
+uv run -m src.train --type dna --tokenizer {bpe, kmer} --size {4M, 20M, 90M} \
+	--dna-dataset-path scratch/ensembl_ncrna_chunks_4096
 ```
 
 Models are saved in `runs/<timestamp>_<type>_<tokenizer>/<id>` so that they can be retrieved later for analysis.
@@ -56,6 +77,12 @@ We look at the distributions of BERT models over masked tokens.
 
 ```bash
 uv run -m src.analyze --type distribution --runs <RUNS> --samples <NSAMPLES> --batch_size <BATCH_SIZE>
+```
+
+For DNA-side analyses on ncRNA instead of OpenGenome, also pass:
+
+```bash
+--dna-dataset-path scratch/ensembl_ncrna_chunks_4096
 ```
 
 #### Static Word Embedings

@@ -6,7 +6,7 @@ from torch.nn import functional as F
 from torch.utils.data import DataLoader
 from transformers import BertForMaskedLM
 
-from src.analyze.data import mlm_preprocess, get_opengenome, get_wikipedia, DeviceWrapper
+from src.analyze.data import mlm_preprocess, get_dna_eval_dataset, get_wikipedia, DeviceWrapper
 from src.utils import N, DATA_TOKENIZER_PAIRS, create_results_dict
 
 def attention(all_models: dict, tokenizers: dict, args) -> dict:
@@ -28,7 +28,7 @@ def attention(all_models: dict, tokenizers: dict, args) -> dict:
         is_text = 'text' in tokenizer.name_or_path
 
         logger.info(f' collecting dataset {"text" if is_text else "dna"}...')
-        dataset = get_wikipedia(n_samples) if is_text else get_opengenome(n_samples)
+        dataset = get_wikipedia(n_samples) if is_text else get_dna_eval_dataset(n_samples, args.dna_dataset_path)
 
         remove = ['text', 'url', 'id', 'title'] if is_text else ['text']
 

@@ -68,6 +68,8 @@ def parse_args():
     parser.add_argument('--device', type=str, choices=['cpu', 'cuda'], default='cuda')
     parser.add_argument('--samples', type=int, default=256)
     parser.add_argument('--batch_size', type=int, default=8)
+    parser.add_argument('--dna-dataset-path', type=str, default=None,
+                        help='optional local DNA dataset saved with save_to_disk; used for DNA-side distribution and fisher analyses')
 
     return parser.parse_args()
 
