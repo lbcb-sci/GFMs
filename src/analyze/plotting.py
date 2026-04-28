@@ -7,6 +7,13 @@ from matplotlib.ticker import FuncFormatter
 
 from src.utils import get_plots_path
 
+
+def _savefig(name: str, stem: str = '') -> None:
+    prefix = f'{stem}_' if stem else ''
+    base = get_plots_path() / f'{prefix}{name}'
+    plt.savefig(base.with_suffix('.pdf'), dpi=400)
+    plt.savefig(base.with_suffix('.png'), dpi=400)
+
 COLOR_TEXT     = "#1D51AC"
 COLOR_DNA_BPE  = "#AB2617"
 COLOR_DNA_KMER = COLOR_DNA_BPE
@@ -46,7 +53,7 @@ def order_fisher_full(fisher: dict):
 
     return x, np.array(y)
 
-def plot_fisher_information(text, dna_bpe, dna_kmer):
+def plot_fisher_information(text, dna_bpe, dna_kmer, stem: str = ''):
     print('plotting fisher information')
     print(text)
     print(dna_bpe)
@@ -106,10 +113,10 @@ def plot_fisher_information(text, dna_bpe, dna_kmer):
     fig.canvas.draw()
     plt.tight_layout()
     plt.subplots_adjust(bottom=0.2)
-    plt.savefig(get_plots_path() / 'fisher.pdf')
+    _savefig('fisher', stem)
     plt.close()
 
-def plot_full_fisher_information(text, dna_bpe, dna_kmer):
+def plot_full_fisher_information(text, dna_bpe, dna_kmer, stem: str = ''):
     N = len(text)
     assert N == len(dna_bpe) == len(dna_kmer)
 
@@ -183,10 +190,10 @@ def plot_full_fisher_information(text, dna_bpe, dna_kmer):
 
     fig.canvas.draw()
 
-    plt.savefig(get_plots_path() / 'full_fisher.pdf')
+    _savefig('full_fisher', stem)
     plt.close()
 
-def plot_average_distribution(mean_dist_text, mean_dist_dna_bpe, mean_dist_dna_kmer):
+def plot_average_distribution(mean_dist_text, mean_dist_dna_bpe, mean_dist_dna_kmer, stem: str = ''):
     sns.set_style('white')
     sns.set_context('paper', font_scale=1.2)
 
@@ -212,12 +219,12 @@ def plot_average_distribution(mean_dist_text, mean_dist_dna_bpe, mean_dist_dna_k
     ax[1].bar(list(range(1, len(mean_dist_dna_bpe)+1)), mean_dist_dna_bpe, color=COLOR_DNA_BPE, label='DNA (bpe)', width=1.0)
     ax[1].legend()
     ax[1].set_ylim((0.0, 0.04))
-    ax[1].set_yticks([0.0, 0.01, 0.02, 0.04])
+    ax[1].set_yticks([0.0, 0.1, 0.2])
     ax[1].set_xticks([1, 25, 50])
 
     ax[2].bar(list(range(1, len(mean_dist_dna_kmer)+1)), mean_dist_dna_kmer, color=COLOR_DNA_KMER, label=r'DNA ($k$-mer)', width=1.0)
     ax[2].set_ylim((0.0, 0.02))
-    ax[2].set_yticks([0.0, 0.01, 0.02])
+    ax[2].set_yticks([0.0, 0.1, 0.2])
     ax[2].set_xticks([1, 25, 50])
 
     ax[2].set_xlabel('Token Rank')
@@ -230,10 +237,10 @@ def plot_average_distribution(mean_dist_text, mean_dist_dna_bpe, mean_dist_dna_k
 
     plt.tight_layout()
     plt.subplots_adjust(left=0.12)
-    plt.savefig(get_plots_path() / 'dist.pdf')
+    _savefig('dist', stem)
     plt.close()
 
-def plot_jensen_shannon(text_js, dna_bpe_js, dna_kmer_js):
+def plot_jensen_shannon(text_js, dna_bpe_js, dna_kmer_js, stem: str = ''):
     sns.set_style('white')
     sns.set_context('paper', font_scale=1.2)
 
@@ -268,10 +275,10 @@ def plot_jensen_shannon(text_js, dna_bpe_js, dna_kmer_js):
 
     plt.margins(x=0, y=0)
     plt.tight_layout()
-    plt.savefig(get_plots_path() / 'js.pdf')
+    _savefig('js', stem)
     plt.close()
 
-def plot_attention_entropies(text, dna_bpe, dna_kmer):
+def plot_attention_entropies(text, dna_bpe, dna_kmer, stem: str = ''):
     fig, ax = plt.subplots(1, figsize=(7, 7))
 
     x = list(sorted(list(text.keys())))
@@ -300,9 +307,9 @@ def plot_attention_entropies(text, dna_bpe, dna_kmer):
     ax.legend()
 
     fig.tight_layout()
-    fig.savefig(get_plots_path() / 'attn_entropy.pdf')
+    _savefig('attn_entropy', stem)
 
-def plot_attention_scores(text, dna_bpe, dna_kmer):
+def plot_attention_scores(text, dna_bpe, dna_kmer, stem: str = ''):
     fig, axes = plt.subplots(3, figsize=(10, 22))
 
     minval = 0.0
@@ -326,9 +333,9 @@ def plot_attention_scores(text, dna_bpe, dna_kmer):
 
     #fig.suptitle('Mutual Information (MI) Between Attention Scores')
     fig.tight_layout()
-    fig.savefig(get_plots_path() / 'attn.pdf')
+    _savefig('attn', stem)
 
-def plot_mi_matrix_full(mim_text, mim_dna_bpe, mim_dna_kmer, num_models, num_layers, model_names=None):
+def plot_mi_matrix_full(mim_text, mim_dna_bpe, mim_dna_kmer, num_models, num_layers, model_names=None, stem: str = ''):
     if model_names is None:
         model_names = [f"M{i+1}" for i in range(num_models)]
 
@@ -368,5 +375,6 @@ def plot_mi_matrix_full(mim_text, mim_dna_bpe, mim_dna_kmer, num_models, num_lay
         ax.set_title(f'MI Matrix — {title}')
 
     plt.tight_layout()
-    plt.savefig(get_plots_path() / 'mi_matrix_full.pdf', dpi=400)
+    _savefig('mi_matrix_full', stem)
+    plt.close()
     #plt.show()

@@ -11,7 +11,7 @@ PATHS = {
     'savedir':             _scratch,
     'og2_dataset':         _data / 'opengenome2_subset/preprocessed_12M_uppercase',
     'wiki_dataset':        _data / 'wikipedia_packed',
-    'ensembl_cdna_chunks': _scratch / 'ensembl_cdna_chunks_4096',
+    'ensembl_dataset': _scratch / 'ensembl_cdna_chunks_4096',
     'cache_dir':           _data,
 }
 

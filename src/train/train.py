@@ -11,11 +11,10 @@ from transformers import DataCollatorForLanguageModeling, Trainer, set_seed
 
 from datasets import load_from_disk
 
-# from src.train.tokenizer.tokenizer import clean_dna
 from .tokenizer import train_bpe_tokenizer, load_6mer_tokenizer, make_iterator_text, make_iterator_dna, clean_text, clean_dna
 from src.utils import count_parameters, get_run_path, get_training_args
 from src.utils.paths import PATHS
-from .data import get_dataset_text
+from .data import get_dataset_wiki, get_dataset_opengenome, get_dataset_ensembl
 from .callback import FisherCallback, ThroughputCallback
 
 
@@ -40,27 +39,7 @@ def train(type: str, **args) -> None:
     if is_text:
         preprocessed_path = PATHS['wiki_dataset']
         logger.info(f' loading preprocessed text dataset from {preprocessed_path}')
-
-        dataset_full = load_from_disk(preprocessed_path)
-        dataset_train = dataset_full.select(range(train_size))
-        dataset_eval  = dataset_full.select(range(train_size, train_size + eval_size))
-
-
-        # dataset_train, dataset_eval = get_dataset_text(3*train_size, 3*eval_size)
-        # logger.info(f' loaded text dataset with {len(dataset_train):,} training and {len(dataset_eval):,} evaluation examples')
-
-        # dataset_train = dataset_train.map(lambda x: {'length': len(x['text'])})
-        # dataset_train = dataset_train.sort('length', reverse=True).select(range(train_size))
-        
-        # dataset_eval = dataset_eval.map(lambda x: {'length': len(x['text'])})
-        # dataset_eval = dataset_eval.sort('length', reverse=True).select(range(eval_size))
-        
-        # logger.info(f' filtered text dataset to {len(dataset_train):,} training and {len(dataset_eval):,} evaluation examples with longest texts')
-        # logger.info(f' shortest training example has {min(dataset_train["length"])} characters, longest has {max(dataset_train["length"])} characters')
-        # logger.info(f' shortest evaluation example has {min(dataset_eval["length"])} characters, longest has {max(dataset_eval["length"])} characters')
-
-        # dataset_train = dataset_train.remove_columns('length')
-        # dataset_eval = dataset_eval.remove_columns('length')
+        dataset_train, dataset_eval = get_dataset_wiki(train_size, eval_size, preprocessed=True)
 
         text_bpe_path = PATHS['text_bpe_tokenizer']  # Path('/home/vrcekl/scratch/GFMs/bpe_text_tokenizer')
         if text_bpe_path.exists():
@@ -98,13 +77,13 @@ def train(type: str, **args) -> None:
         logger.info(f' shortest tokenized evaluation example has {min([len(s) for s in eval_encoded["input_ids"]])} tokens\n')
 
     else:
-        # preprocessed_path = PATHS['og2_dataset']
-        preprocessed_path = PATHS['ensembl_cdna_chunks']
+        preprocessed_path = PATHS['og2_dataset']
         logger.info(f' loading preprocessed DNA dataset from {preprocessed_path}')
+        dataset_train, dataset_eval = get_dataset_opengenome(train_size, eval_size)
 
-        dataset_full = load_from_disk(preprocessed_path)
-        dataset_train = dataset_full.select(range(train_size))
-        dataset_eval  = dataset_full.select(range(train_size, train_size + eval_size))
+        # preprocessed_path = PATHS['ensembl_dataset']
+        # logger.info(f' loading preprocessed DNA dataset from {preprocessed_path}')
+        # dataset_train, dataset_eval = get_dataset_ensembl(train_size, eval_size)
 
         if tokenizer_name == 'bpe':
             dna_bpe_path = PATHS['dna_bpe_tokenizer']  # Path('/home/vrcekl/scratch/GFMs/bpe_dna_tokenizer')

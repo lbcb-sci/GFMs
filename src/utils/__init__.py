@@ -1,7 +1,8 @@
 from .utils import (
     get_logger, 
     get_run_path, 
-    get_plots_path, 
+    get_plots_path,
+    get_plot_stem,
     get_cache_path,
     count_parameters,
     create_results_dict,

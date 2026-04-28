@@ -6,7 +6,7 @@ from torch.nn import functional as F
 from torch.utils.data import DataLoader
 from transformers import BertForMaskedLM
 
-from src.analyze.data import mlm_preprocess, get_opengenome, get_wikipedia, DeviceWrapper
+from src.analyze.data import mlm_preprocess, get_dataset_wiki, get_dataset_opengenome, get_dataset_ensembl, DeviceWrapper
 from src.utils import N, DATA_TOKENIZER_PAIRS, create_results_dict
 
 def attention(all_models: dict, tokenizers: dict, args) -> dict:
@@ -28,9 +28,17 @@ def attention(all_models: dict, tokenizers: dict, args) -> dict:
         is_text = 'text' in tokenizer.name_or_path
 
         logger.info(f' collecting dataset {"text" if is_text else "dna"}...')
-        dataset = get_wikipedia(n_samples) if is_text else get_opengenome(n_samples)
+        if is_text:
+            dataset = get_dataset_wiki(n_samples, preprocessed=False)
+        else:
+            dataset = get_dataset_opengenome(n_samples)
+            # dataset = get_dataset_ensembl(n_samples)
 
-        remove = ['text', 'url', 'id', 'title'] if is_text else ['text']
+        # remove = ['text', 'url', 'id', 'title'] if is_text else ['text']
+        remove = ['text']
+        if 'url' in dataset.column_names: remove.append('url')
+        if 'id' in dataset.column_names: remove.append('id')
+        if 'title' in dataset.column_names: remove.append('title')
 
         logger.info( 'masking tokens in dataset...')
         preprocess = lambda batch: mlm_preprocess(batch, tokenizer, mask_prob=0.10)

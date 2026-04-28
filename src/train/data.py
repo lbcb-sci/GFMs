@@ -1,4 +1,5 @@
-from datasets import load_dataset
+from pathlib import Path
+from datasets import load_dataset, load_from_disk
 
 from src.utils.paths import PATHS
 
@@ -13,19 +14,42 @@ def get_dataset(dataset: str, name: str, cache_dir: str, train_size: int, eval_s
     return dataset_train, dataset_eval
 
 
-def get_dataset_text(train_size: int, eval_size: int):
-    cache_dir = PATHS['cache_dir']  # '/mnt/sod2-project/csb4/wgs/lovro/huggingface'
-    return get_dataset('wikimedia/wikipedia', '20231101.en', cache_dir, train_size, eval_size)
+def get_train_eval_split(train_size: int, eval_size: int, path: Path):
+    dataset_full = load_from_disk(path)
+    dataset_train = dataset_full.select(range(train_size))
+    dataset_eval  = dataset_full.select(range(train_size, train_size + eval_size))
+    return dataset_train, dataset_eval
 
 
-# def get_dataset_dna_plant(train_size: int, eval_size: int):
-#     # TODO: Obsolete, swtiched to OpenGenome2
-#     cache_dir = PATHS['cache_dir']  # '/mnt/sod2-project/csb4/wgs/lovro/huggingface'
-#     return get_dataset('zhangtaolab/plant-reference-genomes', None, cache_dir, train_size, eval_size)
+def choose_longest_seqs(dataset_train, dataset_eval, train_size, eval_size):
+    dataset_train = dataset_train.map(lambda x: {'length': len(x['text'])})
+    dataset_train = dataset_train.sort('length', reverse=True).select(range(train_size))
+    dataset_train = dataset_train.remove_columns('length')
+
+    dataset_eval = dataset_eval.map(lambda x: {'length': len(x['text'])})
+    dataset_eval = dataset_eval.sort('length', reverse=True).select(range(eval_size))
+    dataset_eval = dataset_eval.remove_columns('length')
+
+    return dataset_train, dataset_eval
 
 
-# def get_dataset_dna(train_size: int, eval_size: int):
-#     # TODO: Obsolete, replaced by loading preprocessed dataset from disk. Keeping the function for reference.
-#     ds_path = '/mnt/sod2-project/csb4/wgs/lovro/huggingface/opengenome2_subset/json/pretraining_or_both_phases/eukaryotic_genic_windows'
-#     cache_dir = '/mnt/sod2-project/csb4/wgs/lovro/huggingface/opengenome2_subset'
-#     return get_dataset(ds_path, None, cache_dir, train_size, eval_size)
+def get_dataset_wiki(train_size: int, eval_size: int, preprocessed: bool = True, choose_longest: bool = True):
+    if preprocessed:
+        path = PATHS['wiki_dataset']
+        dataset_train, dataset_eval = get_train_eval_split(train_size, eval_size, path)
+    else:
+        cache_dir = PATHS['cache_dir']
+        dataset_train, dataset_eval = get_dataset('wikimedia/wikipedia', '20231101.en', cache_dir, 3*train_size, 3*eval_size)
+        if choose_longest:
+            dataset_train, dataset_eval = choose_longest_seqs(dataset_train, dataset_eval, train_size, eval_size)
+    return dataset_train, dataset_eval
+
+
+def get_dataset_opengenome(train_size: int, eval_size: int):
+    path = PATHS['og2_dataset']
+    return get_train_eval_split(train_size, eval_size, path)
+
+
+def get_dataset_ensembl(train_size: int, eval_size: int):
+    path = PATHS['ensembl_dataset']
+    return get_train_eval_split(train_size, eval_size, path)

@@ -43,6 +43,11 @@ def get_plots_path() -> Path:
     return data_dir
 
 
+def get_plot_stem(description: str = None) -> str:
+    timestamp = datetime.now().strftime('%y-%m-%d_%H%M%S')
+    return f'{timestamp}_{description}' if description else timestamp
+
+
 def get_cache_path() -> Path:
     data_dir = get_savedir_path() / 'cache'
     data_dir.mkdir(exist_ok=True)
