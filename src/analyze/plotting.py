@@ -28,7 +28,7 @@ _DATASET_LABELS = {
 }
 
 
-def barplot(ax_or_fig, *lists, labels=None, colors=None, legend=None, title=None, ylabel="Value"):
+def barplot(ax_or_fig, *lists, labels=None, colors=None, hatches=None, legend=None, title=None, ylabel="Value"):
     '''Bar plot with per-bar mean ± std annotations. Pass ax=None to create a new figure.'''
     means = [np.mean(lst) for lst in lists]
     stds  = [np.std(lst, ddof=1) if len(lst) > 1 else 0.0 for lst in lists]
@@ -36,13 +36,14 @@ def barplot(ax_or_fig, *lists, labels=None, colors=None, legend=None, title=None
     x = np.arange(len(lists))
     bar_labels = labels if labels is not None else [f"Group {i+1}" for i in range(len(lists))]
     bar_colors = colors if colors is not None else ["steelblue"] * len(lists)
+    bar_hatches = hatches if hatches is not None else [''] * len(lists)
 
     if ax_or_fig is None:
         fig, ax = plt.subplots(figsize=(8, 5))
     else:
         fig, ax = ax_or_fig
 
-    bars = ax.bar(x, means, yerr=stds, capsize=6, color=bar_colors, edgecolor="black", alpha=0.8)
+    bars = ax.bar(x, means, yerr=stds, capsize=6, color=bar_colors, edgecolor="black", alpha=0.8, hatch=bar_hatches)
     ax.set_xticks(x)
     ax.set_xticklabels(bar_labels, rotation=15, ha='right')
     ax.set_ylabel(ylabel)
@@ -77,6 +78,21 @@ def plot_kl_divergence(results: dict, stem: str = '') -> None:
 
     plt.tight_layout()
     _savefig('kl_divergence', stem)
+    plt.close()
+
+def plot_entropy(results: dict, stem: str = '') -> None:
+    init()
+
+    lists  = [results[run_key(data, tok, type)]['entropy'] for data, tok, type in DATA_TOKENIZER_PAIRS]
+    labels = [_DATASET_LABELS[run_key(data, tok, type)]    for data, tok, type in DATA_TOKENIZER_PAIRS]
+    colors = [_DATASET_COLORS[type]                         for _, _, type in DATA_TOKENIZER_PAIRS]
+    hatches = ['/' if tok == 'kmer' else '' for _, tok, _ in DATA_TOKENIZER_PAIRS]
+
+    fig, ax = barplot(None, *lists, labels=labels, colors=colors, hatches=hatches,
+                      legend=_DATASET_LEGEND, ylabel="Entropy (nats)")
+
+    plt.tight_layout()
+    _savefig('entropy', stem)
     plt.close()
 
 def init():
@@ -281,40 +297,47 @@ def plot_average_distribution(results: dict, stem: str = ''):
     _savefig('dist', stem)
     plt.close()
 
-def plot_jensen_shannon(text_js, dna_bpe_js, dna_kmer_js, stem: str = ''):
-    sns.set_style('white')
-    sns.set_context('paper', font_scale=1.2)
+def plot_jensen_shannon(results: dict, stem: str = ''):
+    init()
 
-    plt.rcParams.update({
-        "axes.linewidth": 0.8,
-        "xtick.direction": "in",
-        "ytick.direction": "in",
-        "xtick.labelsize": 10,         
-        "ytick.labelsize": 10,
-        "legend.fontsize": 10,
-    })
+    fig, ax = plt.subplots(figsize=(7, 3))
 
-    fig = plt.figure(figsize=(7, 2.5))
+    all_vals = []
+    legend_handles = {}
 
-    p_values = list(reversed(list(text_js.keys())))
-    text_js = list(reversed(list(text_js.values())))
-    dna_bpe_js = list(reversed(list(dna_bpe_js.values())))
-    dna_kmer_js = list(reversed(list(dna_kmer_js.values())))
+    for data, tok, type_ in DATA_TOKENIZER_PAIRS:
+        key = run_key(data, tok, type_)
+        js = results[key]['js']
 
-    plt.plot(p_values, text_js, label='Text', color=COLOR_TEXT, linewidth=1.8)
-    plt.plot(p_values, dna_bpe_js, label='DNA (BPE)', color=COLOR_DNA_BPE, linewidth=1.8)
-    plt.plot(p_values, dna_kmer_js, label=r'DNA ($k$-mer)', color=COLOR_DNA_KMER, linewidth=1.8, linestyle='--')
-    plt.gca().invert_xaxis()
-    plt.ylim((0.0, max(max(dna_bpe_js), max(dna_kmer_js), max(text_js))+0.05))
-    plt.ylabel('Jensen-Shannon Distance')
-    plt.xlabel(r'Top-$p$ Mass Kept')
-    plt.legend()
+        p_values = list(reversed(list(js.keys())))
+        values   = list(reversed(list(js.values())))
+        all_vals.extend(values)
 
-    plt.xticks([1.0, 0.5, 0.25, min(p_values)])
-    plt.yticks([0.1, 0.5])
-    for ax in fig.get_axes(): ax.xaxis.set_major_formatter(FuncFormatter(lambda x, _: f'{int(x*100)}%'))
+        color    = _DATASET_COLORS[type_]
+        ls       = '--' if tok == 'kmer' else '-'
+        label    = _DATASET_LABELS[key]
 
-    plt.margins(x=0, y=0)
+        ax.plot(p_values, values, color=color, linestyle=ls, linewidth=1.6, label=label)
+
+        if color not in legend_handles:
+            legend_handles[color] = Patch(facecolor=color, edgecolor=color,
+                                          label=_DATASET_LEGEND[color])
+
+    ax.invert_xaxis()
+    ax.set_ylim(0.0, max(all_vals) + 0.05)
+    ax.set_ylabel('Jensen-Shannon Distance')
+    ax.set_xlabel(r'Top-$p$ mass kept')
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda x, _: f'{int(x*100)}%'))
+    ax.set_xticks([1.0, 0.5, 0.25, min(p_values)])
+    ax.margins(x=0, y=0)
+
+    color_legend = ax.legend(handles=list(legend_handles.values()), fontsize=8, loc='upper left')
+    ax.add_artist(color_legend)
+
+    solid = plt.Line2D([], [], color='gray', linestyle='-',  linewidth=1.4, label='BPE')
+    dash  = plt.Line2D([], [], color='gray', linestyle='--', linewidth=1.4, label=r'$k$-mer')
+    ax.legend(handles=[solid, dash], fontsize=8, loc='upper right')
+
     plt.tight_layout()
     _savefig('js', stem)
     plt.close()

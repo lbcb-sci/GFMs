@@ -5,7 +5,8 @@ from transformers import BertConfig, BertForMaskedLM, AutoTokenizer
 
 import src.analyze as analyze
 from src.analyze.plotting import *
-from src.utils import get_logger, count_parameters, DATA_TOKENIZER_PAIRS, get_plot_stem, run_key
+import torch
+from src.utils import get_logger, count_parameters, DATA_TOKENIZER_PAIRS, get_plot_stem, get_cache_path, run_key
 
 
 def main() -> None:
@@ -29,46 +30,53 @@ def main() -> None:
     match args.type:
 
         case 'static':
-            logger.info(' running word-embeddings analysis...')
-            results = analyze.word_embeddings(models, logger)
-            logger.info(' word-embeddings analysis done.\n')
+            results = run_or_load('static', lambda: analyze.word_embeddings(models, logger), args, logger)
             pprint(results)
             print_results(results)
 
         case 'fisher':
-            logger.info(' running fisher information analysis...')
-            results = analyze.fisher(models, tokenizers, args)
-            logger.info(' fisher information analysis done.\n')
+            results = run_or_load('fisher', lambda: analyze.fisher(models, tokenizers, args), args, logger)
             pprint(results)
             plot_fisher(results, stem)
 
         case 'distribution':
-            logger.info(' running distributions analysis...')
-            results = analyze.distributions(models, tokenizers, args)
-            logger.info(' distributions analysis done\n')
+            results = run_or_load('distribution', lambda: analyze.distributions(models, tokenizers, args), args, logger)
             pprint(results)
             plot_distributions(results, stem)
 
         case 'attention':
-            logger.info(' running attention scores analysis...')
-            results = analyze.attention(models, tokenizers, args)
-            logger.info(' attention scores analysis done\n')
+            results = run_or_load('attention', lambda: analyze.attention(models, tokenizers, args), args, logger)
             pprint(results)
             plot_attention(results, stem)
 
         case 'activations':
-            logger.info(' running activations analysis...')
-            results = analyze.activations(models, tokenizers, args)
-            logger.info(' activations analysis done\n')
+            results = run_or_load('activations', lambda: analyze.activations(models, tokenizers, args), args, logger)
             pprint(results)
             print_results(results)
 
         case 'embeddings':
-            logger.info(' running embeddings analysis...')
-            results = analyze.embeddings(models, tokenizers, args)
-            logger.info(' embeddings analysis done\n')
+            results = run_or_load('embeddings', lambda: analyze.embeddings(models, tokenizers, args), args, logger)
             pprint(results)
             print_results(results)
+
+
+def run_or_load(name: str, compute_fn, args, logger) -> dict:
+    desc = args.description or 'default'
+    cache_file = get_cache_path() / f'{name}_{desc}.pt'
+
+    if args.cache and cache_file.exists():
+        logger.info(f' loading cached {name} results from {cache_file}')
+        return torch.load(cache_file, weights_only=False)
+
+    logger.info(f' running {name} analysis...')
+    results = compute_fn()
+    logger.info(f' {name} analysis done.\n')
+
+    if args.cache:
+        torch.save(results, cache_file)
+        logger.info(f' {name} results cached to {cache_file}')
+
+    return results
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Analyze the trained models.')
@@ -80,6 +88,8 @@ def parse_args():
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--description', type=str, required=False, default=None,
                         help='optional description to add to the run path')
+    parser.add_argument('--cache', action='store_true',
+                        help='load fisher results from cache if available, save otherwise')
 
     return parser.parse_args()
 
@@ -168,12 +178,8 @@ def plot_fisher(results, stem: str = ''):
 
 def plot_distributions(results, stem: str = ''):
     plot_kl_divergence(results, stem)
-
-    # text_js    = results['text_bpe']['js']
-    # dna_bpe_js = results['dna_bpe_OG2']['js']
-    # dna_kmer_js = results['dna_kmer_OG2']['js']
-    # plot_jensen_shannon(text_js, dna_bpe_js, dna_kmer_js, stem)
-
+    plot_jensen_shannon(results, stem)
     plot_average_distribution(results, stem)
+    plot_entropy(results, stem)
 
 if __name__ == '__main__': main()

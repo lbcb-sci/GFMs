@@ -36,7 +36,7 @@ def distributions(all_models: dict, tokenizers: dict, args) -> dict:
         if 'id' in dataset.column_names: remove.append('id')
         if 'title' in dataset.column_names: remove.append('title')
 
-        logger.info('masking tokens in dataset...')
+        logger.info(f' masking tokens in dataset...')
         preprocess = lambda batch: mlm_preprocess(batch, tokenizer, mask_prob=0.10)
         encoded = dataset.map(preprocess, batched=True, remove_columns=remove, load_from_cache_file=False)
         encoded.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
@@ -49,18 +49,18 @@ def distributions(all_models: dict, tokenizers: dict, args) -> dict:
             shuffle=False,
         )
 
-        distributions, kl_values = get_distributions(models, dataloader, logger)
+        distributions, kl_values, entropy_values = get_distributions(models, dataloader, logger)
         assert (distributions.sum(dim=-1) - 1 < 1e-5).all()
 
         mean_dist = compute_mean_distribution(distributions)
         results[key]['mean_dist'] = mean_dist.cpu()
         results[key]['kl'] = kl_values
+        results[key]['entropy'] = entropy_values
 
-        # jensen_shannon = compute_jensen_shannon(distributions, TOP_P_VALUES, logger)
-        # results[key]['js'] = jensen_shannon
+        jensen_shannon = compute_jensen_shannon(distributions, TOP_P_VALUES, logger)
+        results[key]['js'] = jensen_shannon
 
         [model.cpu() for model in models]
-        print()
 
     return results
 
@@ -113,11 +113,13 @@ def get_distributions(
 
     result = []
     kl_values = []
+    entropy_values = []
 
     for i, model in enumerate(models):
 
         total_nll = 0.0
         total_kl = 0.0
+        total_entropy = 0.0
         total_correct_predictions = 0
         total_masked_tokens = 0
         dists_model = []
@@ -141,6 +143,7 @@ def get_distributions(
 
             uniform = torch.ones_like(distributions) / distributions.shape[-1]
             total_kl += kl_divergence(uniform, distributions).sum()
+            total_entropy += -(distributions * torch.log(distributions + 1e-10)).sum()
 
             dists_model.extend(distributions.cpu())
             total_correct_predictions += (distributions.argmax(-1) == labels).float().sum()
@@ -151,18 +154,21 @@ def get_distributions(
         result.append(dists_model)
 
         model_kl = (total_kl / total_masked_tokens).item()
+        model_entropy = (total_entropy / total_masked_tokens).item()
         model_perplexity = torch.exp(total_nll / total_masked_tokens).item()
         model_accuracy = (total_correct_predictions / total_masked_tokens).item()
 
         kl_values.append(model_kl)
+        entropy_values.append(model_entropy)
 
-        logger.info(f' KL(model[{i}], U) = {model_kl:.2f}bits')
-        logger.info(f' PPL(model[{i}])   = {model_perplexity:.2f}')
-        logger.info(f' ACC(model[{i}])   = {model_accuracy*100:.2f}%')
+        logger.info(f' KL(model[{i}], U)  = {model_kl:.2f}bits')
+        logger.info(f' H(model[{i}])      = {model_entropy:.2f}bits')
+        logger.info(f' PPL(model[{i}])    = {model_perplexity:.2f}')
+        logger.info(f' ACC(model[{i}])    = {model_accuracy*100:.2f}%')
 
     logger.info(f' total masked tokens = {total_masked_tokens}')
 
-    return torch.stack(result), kl_values
+    return torch.stack(result), kl_values, entropy_values
 
 def top_p_reweight(distributions: Tensor, p: float) -> Tensor:
     '''Reweight distributions to keep only the top-p% probability mass.'''

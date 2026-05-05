@@ -62,8 +62,10 @@ def get_dna_dataset(type: str, n: int):
         return get_dataset_opengenome(n)
     elif type == 'cDNA':
         return get_dataset_ensembl(n)
+        # return get_dataset_opengenome(n)
     elif type == 'ncRNA':
         return get_dataset_ncrna(n)
+        # return get_dataset_opengenome(n)
     else:
         raise ValueError(f'unknown DNA dataset type: {type}')
 
