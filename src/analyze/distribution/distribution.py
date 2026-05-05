@@ -5,9 +5,9 @@ from torch.nn import functional as F
 from torch.utils.data import DataLoader
 from transformers import BertForMaskedLM
 
-from src.analyze.data import get_dataset_wiki, get_dataset_opengenome, get_dataset_ensembl, mlm_preprocess, DeviceWrapper
+from src.analyze.data import get_dataset_wiki, get_dna_dataset, mlm_preprocess, DeviceWrapper
 from src.analyze.metrics import kl_divergence, jensen_shannon_distance
-from src.utils import N, DATA_TOKENIZER_PAIRS, create_results_dict
+from src.utils import DATA_TOKENIZER_PAIRS, create_results_dict, run_key
 
 def distributions(all_models: dict, tokenizers: dict, args) -> dict:
     logger, n_samples, batch_size = args.logger, args.samples, args.batch_size
@@ -18,31 +18,30 @@ def distributions(all_models: dict, tokenizers: dict, args) -> dict:
 
     results = create_results_dict()
 
-    for data, tok in DATA_TOKENIZER_PAIRS:
-        models = all_models[data][tok]
-        tokenizer = tokenizers[data][tok][0]
+    for data, tok, type in DATA_TOKENIZER_PAIRS:
+        key = run_key(data, tok, type)
+        models = all_models[key]
+        tokenizer = tokenizers[key][0]
 
         assert all([model.name_or_path[:-1] == tokenizer.name_or_path[:-1] for model in models])
 
-        is_text = 'text' in tokenizer.name_or_path
-
-        logger.info(f' collecting dataset {"text" if is_text else "dna"}...')
-        if is_text:
+        logger.info(f' collecting dataset for {key}...')
+        if data == 'text':
             dataset = get_dataset_wiki(n_samples, preprocessed=True)
         else:
-            dataset = get_dataset_opengenome(n_samples)
-            # dataset = get_dataset_ensembl(n_samples)
+            dataset = get_dna_dataset(type, n_samples)
 
-        # remove = ['text', 'url', 'id', 'title'] if is_text else ['text']
         remove = ['text']
         if 'url' in dataset.column_names: remove.append('url')
         if 'id' in dataset.column_names: remove.append('id')
         if 'title' in dataset.column_names: remove.append('title')
 
-        logger.info( 'masking tokens in dataset...')
+        logger.info('masking tokens in dataset...')
         preprocess = lambda batch: mlm_preprocess(batch, tokenizer, mask_prob=0.10)
         encoded = dataset.map(preprocess, batched=True, remove_columns=remove, load_from_cache_file=False)
         encoded.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
+
+        [model.to(args.device) for model in models]
 
         dataloader = DataLoader(
             DeviceWrapper(encoded, device=args.device),
@@ -50,16 +49,18 @@ def distributions(all_models: dict, tokenizers: dict, args) -> dict:
             shuffle=False,
         )
 
-        distributions = get_distributions(models, dataloader, logger)
+        distributions, kl_values = get_distributions(models, dataloader, logger)
         assert (distributions.sum(dim=-1) - 1 < 1e-5).all()
 
         mean_dist = compute_mean_distribution(distributions)
-        results[data][tok]['mean_dist'] = mean_dist.cpu()
+        results[key]['mean_dist'] = mean_dist.cpu()
+        results[key]['kl'] = kl_values
 
-        jensen_shannon = compute_jensen_shannon(distributions, TOP_P_VALUES, logger)
-        results[data][tok]['js'] = jensen_shannon
+        # jensen_shannon = compute_jensen_shannon(distributions, TOP_P_VALUES, logger)
+        # results[key]['js'] = jensen_shannon
 
         [model.cpu() for model in models]
+        print()
 
     return results
 
@@ -104,22 +105,21 @@ def compute_jensen_shannon(
 
 @torch.autograd.inference_mode()
 def get_distributions(
-    models: tuple[BertForMaskedLM], 
-    dataloader: DataLoader, 
+    models: tuple[BertForMaskedLM],
+    dataloader: DataLoader,
     logger,
-)-> Tensor:
+) -> tuple[Tensor, list[float]]:
     '''Extract distributions over masked tokens. Also computes KL div, perplexity and accuracy.'''
 
     result = []
+    kl_values = []
 
     for i, model in enumerate(models):
 
         total_nll = 0.0
         total_kl = 0.0
         total_correct_predictions = 0
-
         total_masked_tokens = 0
-
         dists_model = []
 
         for batch in tqdm(dataloader):
@@ -140,10 +140,9 @@ def get_distributions(
             assert (distributions.sum(dim=1) - 1 < 1e-5).all()
 
             uniform = torch.ones_like(distributions) / distributions.shape[-1]
-            total_kl += kl_divergence(distributions, uniform).sum()
+            total_kl += kl_divergence(uniform, distributions).sum()
 
-            dists_model.extend(distributions)
-
+            dists_model.extend(distributions.cpu())
             total_correct_predictions += (distributions.argmax(-1) == labels).float().sum()
 
         dists_model = torch.stack(dists_model)
@@ -155,13 +154,15 @@ def get_distributions(
         model_perplexity = torch.exp(total_nll / total_masked_tokens).item()
         model_accuracy = (total_correct_predictions / total_masked_tokens).item()
 
+        kl_values.append(model_kl)
+
         logger.info(f' KL(model[{i}], U) = {model_kl:.2f}bits')
         logger.info(f' PPL(model[{i}])   = {model_perplexity:.2f}')
         logger.info(f' ACC(model[{i}])   = {model_accuracy*100:.2f}%')
 
     logger.info(f' total masked tokens = {total_masked_tokens}')
 
-    return torch.stack(result)
+    return torch.stack(result), kl_values
 
 def top_p_reweight(distributions: Tensor, p: float) -> Tensor:
     '''Reweight distributions to keep only the top-p% probability mass.'''

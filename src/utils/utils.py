@@ -57,12 +57,18 @@ def get_cache_path() -> Path:
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-DATA_TOKENIZER_PAIRS = [('text', 'bpe'), ('dna', 'bpe'), ('dna', 'kmer')]
+DATA_TOKENIZER_PAIRS = [
+    ('text', 'bpe', 'wiki'),
+    ('dna', 'bpe',  'OG2'),
+    ('dna', 'kmer', 'OG2'),
+    ('dna', 'bpe',  'ncRNA'),
+    ('dna', 'kmer', 'ncRNA'),
+    ('dna', 'bpe',  'cDNA'),
+    ('dna', 'kmer', 'cDNA')
+]
 
-def create_results_dict() -> dict: 
-    results = {}
-    for data, tok in DATA_TOKENIZER_PAIRS:
-        if data not in results.keys(): results[data] = {}
-        results[data][tok] = {}
+def run_key(data: str, tok: str, type: str) -> str:
+    return f'{data}_{tok}_{type}' if type else f'{data}_{tok}'
 
-    return results
+def create_results_dict() -> dict:
+    return {run_key(data, tok, type): {} for data, tok, type in DATA_TOKENIZER_PAIRS}

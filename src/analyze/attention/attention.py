@@ -2,12 +2,10 @@ import torch
 import numpy as np
 from tqdm import tqdm
 from torch import Tensor
-from torch.nn import functional as F
 from torch.utils.data import DataLoader
-from transformers import BertForMaskedLM
 
-from src.analyze.data import mlm_preprocess, get_dataset_wiki, get_dataset_opengenome, get_dataset_ensembl, DeviceWrapper
-from src.utils import N, DATA_TOKENIZER_PAIRS, create_results_dict
+from src.analyze.data import mlm_preprocess, get_dataset_wiki, get_dna_dataset, DeviceWrapper
+from src.utils import DATA_TOKENIZER_PAIRS, create_results_dict, run_key
 
 def attention(all_models: dict, tokenizers: dict, args) -> dict:
     logger, n_samples, batch_size = args.logger, args.samples, args.batch_size
@@ -16,34 +14,33 @@ def attention(all_models: dict, tokenizers: dict, args) -> dict:
 
     results = create_results_dict()
 
-    for data, tok in DATA_TOKENIZER_PAIRS:
+    for data, tok, type in DATA_TOKENIZER_PAIRS:
+        key = run_key(data, tok, type)
 
-        logger.info(f' computing for ({data}, {tok})...')
+        logger.info(f' computing for {key}...')
 
-        models = all_models[data][tok]#[:2]
-        tokenizer = tokenizers[data][tok][0]
+        models = all_models[key]
+        tokenizer = tokenizers[key][0]
 
         assert all([model.name_or_path[:-1] == tokenizer.name_or_path[:-1] for model in models])
 
-        is_text = 'text' in tokenizer.name_or_path
-
-        logger.info(f' collecting dataset {"text" if is_text else "dna"}...')
-        if is_text:
-            dataset = get_dataset_wiki(n_samples, preprocessed=False)
+        logger.info(f' collecting dataset...')
+        if data == 'text':
+            dataset = get_dataset_wiki(n_samples, preprocessed=True)
         else:
-            dataset = get_dataset_opengenome(n_samples)
-            # dataset = get_dataset_ensembl(n_samples)
+            dataset = get_dna_dataset(type, n_samples)
 
-        # remove = ['text', 'url', 'id', 'title'] if is_text else ['text']
         remove = ['text']
         if 'url' in dataset.column_names: remove.append('url')
         if 'id' in dataset.column_names: remove.append('id')
         if 'title' in dataset.column_names: remove.append('title')
 
-        logger.info( 'masking tokens in dataset...')
+        logger.info('masking tokens in dataset...')
         preprocess = lambda batch: mlm_preprocess(batch, tokenizer, mask_prob=0.10)
         encoded = dataset.map(preprocess, batched=True, remove_columns=remove, load_from_cache_file=False)
         encoded.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
+
+        [model.to(args.device) for model in models]
 
         dataloader = DataLoader(
             DeviceWrapper(encoded, device=args.device),
@@ -53,9 +50,9 @@ def attention(all_models: dict, tokenizers: dict, args) -> dict:
 
         mifull, mismall, entropies = get_mimatrix(models, dataloader, logger)
 
-        results[data][tok][f'mimatrix'] = mismall
-        results[data][tok][f'mimatrix_full'] = mifull
-        results[data][tok][f'entropies'] = entropies
+        results[key]['mimatrix'] = mismall
+        results[key]['mimatrix_full'] = mifull
+        results[key]['entropies'] = entropies
 
         [model.cpu() for model in models]
 

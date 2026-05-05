@@ -52,6 +52,22 @@ def get_dataset_ensembl(n: int):
     return get_test_split(n, path)
 
 
+def get_dataset_ncrna(n: int):
+    path = PATHS['ncrna_dataset']
+    return get_test_split(n, path)
+
+
+def get_dna_dataset(type: str, n: int):
+    if type == 'OG2':
+        return get_dataset_opengenome(n)
+    elif type == 'cDNA':
+        return get_dataset_ensembl(n)
+    elif type == 'ncRNA':
+        return get_dataset_ncrna(n)
+    else:
+        raise ValueError(f'unknown DNA dataset type: {type}')
+
+
 # def get_wikipedia(n: int) -> Dataset:
 #     return get_dataset('wikimedia/wikipedia', name='20231101.en', n=n)
 
