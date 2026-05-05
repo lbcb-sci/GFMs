@@ -3,9 +3,10 @@
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 from matplotlib.ticker import FuncFormatter
 
-from src.utils import get_plots_path
+from src.utils import get_plots_path, DATA_TOKENIZER_PAIRS, run_key
 
 
 def _savefig(name: str, stem: str = '') -> None:
@@ -17,6 +18,66 @@ def _savefig(name: str, stem: str = '') -> None:
 COLOR_TEXT     = "#1D51AC"
 COLOR_DNA_BPE  = "#AB2617"
 COLOR_DNA_KMER = COLOR_DNA_BPE
+
+# Colors and legend for the dataset-type barplots
+_DATASET_COLORS = {'wiki': '#56B4E9', 'OG2': '#E69F00', 'ncRNA': '#D55E00', 'cDNA': '#CC3311'}
+_DATASET_LEGEND = {'#56B4E9': 'Wikipedia', '#E69F00': 'OpenGenome2', '#D55E00': 'ncRNA', '#CC3311': 'cDNA'}
+_DATASET_LABELS = {
+    run_key(data, tok, type): f'{"Text" if data == "text" else "DNA"} {"BPE" if tok == "bpe" else "k-mer"}{" " + type if type else ""}'
+    for data, tok, type in DATA_TOKENIZER_PAIRS
+}
+
+
+def barplot(ax_or_fig, *lists, labels=None, colors=None, legend=None, title=None, ylabel="Value"):
+    '''Bar plot with per-bar mean ± std annotations. Pass ax=None to create a new figure.'''
+    means = [np.mean(lst) for lst in lists]
+    stds  = [np.std(lst, ddof=1) if len(lst) > 1 else 0.0 for lst in lists]
+
+    x = np.arange(len(lists))
+    bar_labels = labels if labels is not None else [f"Group {i+1}" for i in range(len(lists))]
+    bar_colors = colors if colors is not None else ["steelblue"] * len(lists)
+
+    if ax_or_fig is None:
+        fig, ax = plt.subplots(figsize=(8, 5))
+    else:
+        fig, ax = ax_or_fig
+
+    bars = ax.bar(x, means, yerr=stds, capsize=6, color=bar_colors, edgecolor="black", alpha=0.8)
+    ax.set_xticks(x)
+    ax.set_xticklabels(bar_labels, rotation=15, ha='right')
+    ax.set_ylabel(ylabel)
+    if title:
+        ax.set_title(title)
+
+    if legend:
+        handles = [Patch(facecolor=c, edgecolor="black", alpha=0.8, label=name)
+                   for c, name in legend.items()]
+        ax.legend(handles=handles)
+
+    for bar, mean, std in zip(bars, means, stds):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + std + 0.02 * max(means),
+            f"{mean:.2f} ± {std:.2f}",
+            ha="center", va="bottom", fontsize=8,
+        )
+
+    return fig, ax
+
+
+def plot_kl_divergence(results: dict, stem: str = '') -> None:
+    init()
+
+    lists  = [results[run_key(data, tok, type)]['kl'] for data, tok, type in DATA_TOKENIZER_PAIRS]
+    labels = [_DATASET_LABELS[run_key(data, tok, type)]   for data, tok, type in DATA_TOKENIZER_PAIRS]
+    colors = [_DATASET_COLORS[type]                        for _, _, type in DATA_TOKENIZER_PAIRS]
+
+    fig, ax = barplot(None, *lists, labels=labels, colors=colors,
+                      legend=_DATASET_LEGEND, ylabel="KL divergence")
+
+    plt.tight_layout()
+    _savefig('kl_divergence', stem)
+    plt.close()
 
 def init():
     sns.set_style('white')
@@ -53,190 +114,170 @@ def order_fisher_full(fisher: dict):
 
     return x, np.array(y)
 
-def plot_fisher_information(text, dna_bpe, dna_kmer, stem: str = ''):
-    print('plotting fisher information')
-    print(text)
-    print(dna_bpe)
-    print(dna_kmer)
-
-    xlabels, y_text = order_fisher(text)
-    _, y_dna_bpe = order_fisher(dna_bpe)
-    _, y_dna_kmer = order_fisher(dna_kmer)
-
-    y_pos = np.arange(0, len(xlabels))
-
-    y_text /= y_text.sum()
-    y_dna_bpe /= y_dna_bpe.sum()
-    y_dna_kmer /= y_dna_kmer.sum()
-
+def plot_fisher_information(results: dict, stem: str = ''):
     init()
 
-    fig, ax = plt.subplots(1, 2, figsize=(7, 2), sharey=True)
+    # 2x2 grid: one cell per dataset type; DNA cells show BPE + k-mer side by side
+    _cells = [
+        ('wiki',  'Wikipedia',   [('text', 'bpe', 'wiki')]),
+        ('OG2',   'OpenGenome2', [('dna', 'bpe', 'OG2'),   ('dna', 'kmer', 'OG2')]),
+        ('ncRNA', 'ncRNA',       [('dna', 'bpe', 'ncRNA'), ('dna', 'kmer', 'ncRNA')]),
+        ('cDNA',  'cDNA',        [('dna', 'bpe', 'cDNA'),  ('dna', 'kmer', 'cDNA')]),
+    ]
 
-    ax[0].barh(y_pos, y_text, height=0.6, color=COLOR_TEXT, label='Text', linewidth=0.5, edgecolor='black')
-    ax[0].legend()
-    ax[0].set_xlim((0.0, 1.0))
-    ax[0].set_xticks([0.0, 0.5, 1.0])
-
-    bar_height = 0.4
-    offset = bar_height / 2
-
-    ax[1].barh(y_pos + offset, y_dna_bpe, height=bar_height, color=COLOR_DNA_BPE, label='DNA (BPE)', linewidth=0.5, edgecolor='black')
-    ax[1].barh(y_pos - offset, y_dna_kmer, height=bar_height, color=COLOR_DNA_KMER, label=r'DNA ($k$-mer)', hatch='///', linewidth=0.5, edgecolor='black')
-    ax[1].legend()
-    ax[1].set_xlim((0.0, 1.0))
-    ax[1].set_xticks([0.0, 0.5, 1.0])
-
-    fig.text(0.45, 0.05, 'Normalized Fisher Information', va='center', rotation='horizontal', fontsize=10)
-
-    def format_y(x, pos):
-        label = xlabels[pos]
-        if not isinstance(label, str):
-            return label
-        if '.' in label:
-            label = label.replace('.', '-')
+    def _fmt_label(label, _pos):
+        if not isinstance(label, str): return label
+        label = label.replace('.', '-')
         label = label[0].capitalize() + label[1:]
-        if label == 'Encoder':
-            return 'Transformer Layers'
-        return label
+        return 'Transformer Layers' if label == 'Encoder' else label
 
-    ax[0].set_yticks(y_pos)
-    ax[0].yaxis.set_major_formatter(FuncFormatter(format_y))
-    ax[1].set_yticks(y_pos)
+    def _per_model_stats(fisher_full):
+        """Mean and std of normalized [embeddings, encoder, head] across 5 models."""
+        all_y = []
+        for model_dict in fisher_full.values():
+            _, y_full = order_fisher_full(model_dict)
+            y = np.array([y_full[0], y_full[1:-1].sum(), y_full[-1]])
+            all_y.append(y / y.sum())
+        arr = np.stack(all_y)
+        return arr.mean(axis=0), arr.std(axis=0, ddof=1)
 
-    ax[0].tick_params(axis='x', which='both', length=0)
-    ax[1].tick_params(axis='x', which='both', length=0)
+    y_pos = np.arange(3)
+    fig, axes = plt.subplots(2, 2, figsize=(8, 4), sharey=True)
 
-    ax[0].margins(y=0.2)
-    ax[1].margins(y=0.2)
+    for (type_, title, groups), ax in zip(_cells, axes.flat):
+        color = _DATASET_COLORS[type_]
+        stats = [_per_model_stats(results[run_key(d, t, ty)]['fisher_full']) for d, t, ty in groups]
+
+        if len(stats) == 1:
+            mean, std = stats[0]
+            ax.barh(y_pos, mean, xerr=std, height=0.6, color=color,
+                    edgecolor='black', linewidth=0.5, error_kw=dict(elinewidth=0.8, capsize=3))
+        else:
+            h = 0.4
+            mean0, std0 = stats[0]
+            mean1, std1 = stats[1]
+            ax.barh(y_pos + h/2, mean0, xerr=std0, height=h, color=color,
+                    edgecolor='black', linewidth=0.5, label='BPE',
+                    error_kw=dict(elinewidth=0.8, capsize=3))
+            ax.barh(y_pos - h/2, mean1, xerr=std1, height=h, color=color,
+                    edgecolor='black', linewidth=0.5, hatch='///', label=r'$k$-mer',
+                    error_kw=dict(elinewidth=0.8, capsize=3))
+            ax.legend(fontsize=7)
+
+        ax.set_title(title, fontsize=9)
+        ax.set_xlim(0.0, 1.0)
+        ax.set_xticks([0.0, 0.5, 1.0])
+        ax.tick_params(axis='x', which='both', length=0)
+        ax.margins(y=0.2)
+        ax.set_yticks(y_pos)
+        ax.yaxis.set_major_formatter(FuncFormatter(_fmt_label))
+
+    for ax in axes[1]:
+        ax.set_xlabel('Normalized Fisher Information', fontsize=8)
 
     fig.canvas.draw()
     plt.tight_layout()
-    plt.subplots_adjust(bottom=0.2)
     _savefig('fisher', stem)
     plt.close()
 
-def plot_full_fisher_information(text, dna_bpe, dna_kmer, stem: str = ''):
-    N = len(text)
-    assert N == len(dna_bpe) == len(dna_kmer)
+def plot_full_fisher_information(results: dict, stem: str = ''):
+    # 2x2 grid; one cell per dataset type; bars show mean across 5 models
+    _cells = [
+        ('wiki',  'Wikipedia',   [('text', 'bpe', 'wiki')]),
+        ('OG2',   'OpenGenome2', [('dna', 'bpe', 'OG2'),   ('dna', 'kmer', 'OG2')]),
+        ('ncRNA', 'ncRNA',       [('dna', 'bpe', 'ncRNA'), ('dna', 'kmer', 'ncRNA')]),
+        ('cDNA',  'cDNA',        [('dna', 'bpe', 'cDNA'),  ('dna', 'kmer', 'cDNA')]),
+    ]
+
+    def _mean_normalized(fisher_full_dict):
+        all_y = []
+        xlabels = None
+        for f in fisher_full_dict.values():
+            xl, y = order_fisher_full(f)
+            if xlabels is None:
+                xlabels = xl
+            all_y.append(y / y.sum())
+        return xlabels, np.stack(all_y).mean(axis=0)
 
     init()
+    fig, axes = plt.subplots(2, 2, figsize=(12, 7), squeeze=False)
+    fig.subplots_adjust(top=0.93, bottom=0.20, hspace=0.55, wspace=0.30, left=0.07, right=0.99)
 
-    fig, ax = plt.subplots(N, 2, figsize=(7, 7.5), sharey=True)
+    for (type_, title, groups), ax in zip(_cells, axes.flat):
+        color = _DATASET_COLORS[type_]
+        fisher_lists = [results[run_key(d, t, ty)]['fisher_full'] for d, t, ty in groups]
 
-    fig.subplots_adjust(
-        top=0.99,     # smaller -> less space at top
-        bottom=0.18,  # larger -> more space at bottom
-        hspace=0.05,
-        wspace=0.03,
-        right=0.99,
-        left=0.05,
-    )
+        xlabels, mean_y0 = _mean_normalized(fisher_lists[0])
+        y_pos = np.arange(len(xlabels))
 
-    for model in range(N):
-        i = model
+        def _fmt_x(val, _pos):
+            idx = int(round(val))
+            if 0 <= idx < len(xlabels):
+                lbl = xlabels[idx][0].capitalize() + xlabels[idx][1:]
+                return lbl.replace('.', ' ')
+            return ''
 
-        xlabels, y_text = order_fisher_full(text[model])
-        _, y_dna_bpe = order_fisher_full(dna_bpe[model])
-        _, y_dna_kmer = order_fisher_full(dna_kmer[model])
-
-        y_pos = np.arange(0, len(xlabels))
-
-        y_text /= y_text.sum()
-        y_dna_bpe /= y_dna_bpe.sum()
-        y_dna_kmer /= y_dna_kmer.sum()
-
-        width = 0.4
-
-        def format_y(c, pos):
-            label = xlabels[pos]
-            label = label[0].capitalize() + label[1:]
-            label = label.replace('.', ' ')
-            return label
-
-        kmer = r'$k$-mer'
-
-        ax[i, 0].bar(y_pos, y_text, color=COLOR_TEXT, label=f'Text #{i+1}', linewidth=0.5, edgecolor='black')
-
-        ax[i, 1].bar(y_pos - width/2, y_dna_bpe, width, color=COLOR_DNA_BPE, label=f'DNA (BPE) #{i+1}', edgecolor='black', linewidth=0.5)
-        ax[i, 1].bar(y_pos + width/2, y_dna_kmer, width, color=COLOR_DNA_KMER, label=f'DNA ({kmer}) #{i+1}', hatch='///', edgecolor='black', linewidth=0.5)
-
-        ax[i, 0].set_xticks(y_pos)
-        ax[i, 0].set_xticklabels(xlabels)
-        ax[i, 1].set_xticks(y_pos)
-        ax[i, 1].set_xticklabels(xlabels)
-        
-        if i != N - 1:
-            ax[i, 0].tick_params(axis='y', left=False, labelleft=False)
-            ax[i, 1].tick_params(axis='y', left=False, labelleft=False)
-            ax[i, 0].set_xticklabels([])
-            ax[i, 1].set_xticklabels([])
+        if len(groups) == 1:
+            ax.bar(y_pos, mean_y0, color=color, edgecolor='black', linewidth=0.5)
         else:
-            ax[i, 0].set_yticks([0.0, 0.5, 1.0])
+            _, mean_y1 = _mean_normalized(fisher_lists[1])
+            w = 0.4
+            ax.bar(y_pos - w/2, mean_y0, width=w, color=color, edgecolor='black', linewidth=0.5, label='BPE')
+            ax.bar(y_pos + w/2, mean_y1, width=w, color=color, edgecolor='black', linewidth=0.5, hatch='///', label=r'$k$-mer')
+            ax.legend(fontsize=7)
 
-            ax[i, 0].tick_params(axis='y', left=True, labelleft=True)
-            ax[i, 1].tick_params(axis='y', left=False, labelleft=False)
+        ax.set_title(title, fontsize=9)
+        ax.set_xticks(y_pos)
+        ax.xaxis.set_major_formatter(FuncFormatter(_fmt_x))
+        ax.tick_params(axis='x', labelrotation=90, labelsize=7)
+        ax.margins(x=0.02)
+        ax.set_yticks([0.0, 0.5, 1.0])
 
-            ax[i, 0].xaxis.set_major_formatter(FuncFormatter(format_y))
-            ax[i, 1].xaxis.set_major_formatter(FuncFormatter(format_y))
-
-        ax[i, 0].legend()
-        ax[i, 1].legend()
-        ax[i, 0].tick_params(axis='x', labelrotation=90)
-        ax[i, 1].tick_params(axis='x', labelrotation=90)
-
-        ax[i, 0].margins(x=0.02)
-        ax[i, 1].margins(x=0.02)
+    for ax in axes[1]:
+        ax.set_xlabel('Layer', fontsize=8)
+    for ax in axes[:, 0]:
+        ax.set_ylabel('Normalized Fisher Information', fontsize=8)
 
     fig.canvas.draw()
-
     _savefig('full_fisher', stem)
     plt.close()
 
-def plot_average_distribution(mean_dist_text, mean_dist_dna_bpe, mean_dist_dna_kmer, stem: str = ''):
-    sns.set_style('white')
-    sns.set_context('paper', font_scale=1.2)
+def plot_average_distribution(results: dict, stem: str = ''):
+    init()
 
-    plt.rcParams.update({
-        "axes.linewidth": 0.8,
-        "xtick.direction": "in",
-        "ytick.direction": "in",
-        "xtick.labelsize": 10,         
-        "ytick.labelsize": 10,
-        "legend.fontsize": 10,
-    })
+    from matplotlib.gridspec import GridSpec
+    n_rows = 4
+    fig = plt.figure(figsize=(9, 2.2 * n_rows))
+    gs = GridSpec(n_rows, 4, figure=fig, hspace=0.5, wspace=0.5)
 
-    fig, ax = plt.subplots(3, 1, figsize=(7, 5))
-    #fig.patch.set_edgecolor('black')
-    #fig.patch.set_linewidth(1)
+    ax_slots = [
+        fig.add_subplot(gs[0, 1:3]),
+        fig.add_subplot(gs[1, 0:2]), fig.add_subplot(gs[1, 2:4]),
+        fig.add_subplot(gs[2, 0:2]), fig.add_subplot(gs[2, 2:4]),
+        fig.add_subplot(gs[3, 0:2]), fig.add_subplot(gs[3, 2:4]),
+    ]
 
-    ax[0].bar(list(range(1, len(mean_dist_text)+1)), mean_dist_text, color=COLOR_TEXT, label='Text', width=1.0)
-    ax[0].legend()
-    ax[0].set_xticks([1, 5, 10])
-    ax[0].set_yticks([0.0, 0.5, 1.0])
-    ax[0].set_ylim((0.0, 1.0))
+    last_row_axes = ax_slots[5:]
 
-    ax[1].bar(list(range(1, len(mean_dist_dna_bpe)+1)), mean_dist_dna_bpe, color=COLOR_DNA_BPE, label='DNA (bpe)', width=1.0)
-    ax[1].legend()
-    ax[1].set_ylim((0.0, 0.04))
-    ax[1].set_yticks([0.0, 0.1, 0.2])
-    ax[1].set_xticks([1, 25, 50])
+    for ax, (data, tok, type) in zip(ax_slots, DATA_TOKENIZER_PAIRS):
+        key = run_key(data, tok, type)
+        n = 10 if data == 'text' else 50
+        dist = results[key]['mean_dist'][:n]
 
-    ax[2].bar(list(range(1, len(mean_dist_dna_kmer)+1)), mean_dist_dna_kmer, color=COLOR_DNA_KMER, label=r'DNA ($k$-mer)', width=1.0)
-    ax[2].set_ylim((0.0, 0.02))
-    ax[2].set_yticks([0.0, 0.1, 0.2])
-    ax[2].set_xticks([1, 25, 50])
+        ax.bar(range(1, len(dist) + 1), dist, color=_DATASET_COLORS[type],
+               width=1.0, edgecolor='black', linewidth=0.4)
+        ax.set_title(_DATASET_LABELS[key], fontsize=9, pad=3)
+        ax.margins(x=0.02)
+        ax.set_xticks([1, n // 2, n])
 
-    ax[2].set_xlabel('Token Rank')
-    ax[2].legend()
+        ymax = float(dist.max())
+        ax.set_yticks([0, round(ymax / 2, 4), round(ymax, 4)])
 
-    fig.text(0.02, 0.5, 'Average Softmax Probability', va='center', rotation='vertical')
+        if ax in last_row_axes:
+            ax.set_xlabel('Token Rank')
 
-    ax[0].margins(x=0.02)
-    ax[1].margins(x=0.02)
-
-    plt.tight_layout()
-    plt.subplots_adjust(left=0.12)
+    fig.text(0.04, 0.5, 'Average Softmax Probability', va='center', rotation='vertical')
+    plt.subplots_adjust(left=0.14)
     _savefig('dist', stem)
     plt.close()
 
