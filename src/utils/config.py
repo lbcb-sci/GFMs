@@ -76,7 +76,7 @@ base = {
     'max_length': 512,
     'eval_size': 10_000,
     'train_size': 2_000_000,
-    # 5 * 512 * 2M ~ 5b tokens
+    # 5 * 512 * 2M = 5.12b tokens
 }
 
 _test = { # very small config for testing
@@ -100,7 +100,8 @@ def get_config_90M() -> dict:
     (This one simply returns the default BERT configuration as provided by HuggingFace.)
     '''
     config = base.copy()
-    config['bertconfig'] = BertConfig(vocab_size=0) # setting vocab size to 0 because it will be updated by tokenizer
+    config['bertconfig'] = BertConfig(vocab_size=0)
+    # setting vocab size to 0 because it will be updated after loading tokenizer
     return config
 
 
