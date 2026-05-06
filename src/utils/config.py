@@ -1,4 +1,8 @@
-from transformers import BertConfig, TrainingArguments 
+from torch.multiprocessing import cpu_count
+from transformers import BertConfig, TrainingArguments
+
+from src.utils.paths import PATHS
+
 
 def get_training_args(run_name: str, seed: int, **args):
     '''
@@ -10,6 +14,9 @@ def get_training_args(run_name: str, seed: int, **args):
     workers = min(16, args['batch_size'])
 
     return TrainingArguments(
+        # checkpoint location
+        output_dir= PATHS['checkpoints'] / run_name,
+
         # batch size
         per_device_train_batch_size=args['batch_size'],
         per_device_eval_batch_size=args['batch_size'],
@@ -29,8 +36,8 @@ def get_training_args(run_name: str, seed: int, **args):
 
         save_strategy='steps',
         eval_strategy='steps',
-        save_steps=5_000,
-        eval_steps=5_000,
+        save_steps=10_000,
+        eval_steps=1_000,
 
         fp16=False,
         bf16=False,
@@ -55,18 +62,17 @@ def get_training_args(run_name: str, seed: int, **args):
 
         # seeds (random model init but not data)
         seed=seed,
-        data_seed=42, # deterministic dataloader
+        data_seed=42, # non-deterministic dataloader, put 42 for deterministic
     )
 
 N = 5
 
-# base configuration
+# base configuration for training on 1b tokens
 base = {
     'N': N,    # number of models to train
-    'kmer': 6, # vocab size = 4**kmer
-
+    'kmer': 6, # vocab size = 4**kmer + special tokens
     'epochs': 5,
-    'batch_size': 64,
+    'batch_size': 96,
     'max_length': 512,
     'eval_size': 10_000,
     'train_size': 2_000_000,
@@ -74,7 +80,7 @@ base = {
 }
 
 _test = { # very small config for testing
-    'N': 5,
+    'N': N,
     'kmer': 6,
     'epochs': 2,
     'batch_size': 16,
@@ -98,6 +104,17 @@ def get_config_90M() -> dict:
     # setting vocab size to 0 because it will be updated after loading tokenizer
     return config
 
+
+def get_config_90M_noT() -> dict:
+    '''Get config with a 90M params BERT model, but without the Transformer layers.'''
+    config = base.copy()
+    config['bertconfig'] = BertConfig(
+        num_hidden_layers=0,
+        vocab_size=0
+    )
+    return config
+
+
 def get_config_20M() -> dict:
     '''Get config with a 20M params BERT model.'''
     config = base.copy()
@@ -109,6 +126,7 @@ def get_config_20M() -> dict:
         vocab_size=0,
     )
     return config
+
 
 def get_config_4M() -> dict:
     '''Get config with a 4M params BERT model.'''

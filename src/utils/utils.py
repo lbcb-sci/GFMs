@@ -1,46 +1,74 @@
 import logging
-from time import time
+from datetime import datetime
 from pathlib import Path
 
-def get_logger(name: str):
+from src.utils.paths import PATHS
+
+
+def get_logger(name: str) -> logging.Logger:
     logging.basicConfig(level=logging.INFO)
     logging.getLogger('httpx').setLevel(logging.WARNING)
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
     return logger
 
-def get_root_path():
+
+def get_root_path() -> Path:
     return Path(__file__).resolve().parent.parent.parent
 
-def get_runs_path():
-    path = get_root_path() / 'runs'
+
+def get_savedir_path() -> Path:
+    path = PATHS['savedir']
     path.mkdir(exist_ok=True)
     return path
 
-def get_run_path(type: str, tokenizer: str) -> Path:
-    run_path = get_runs_path() / f'{int(time())}_{type}_{tokenizer}'
+
+def get_runs_path() -> Path:
+    path = get_savedir_path() / 'runs'
+    path.mkdir(exist_ok=True)
+    return path
+
+
+def get_run_path(type: str, tokenizer: str, description: str = None) -> Path:
+    time_start = datetime.now().strftime('%y-%m-%d_%H%M%S')
+    description = f'_{description}' if description else ''
+    run_path = get_runs_path() / f'{time_start}_{type}_{tokenizer}{description}'
     run_path.mkdir(exist_ok=False)
     return run_path
 
-def get_plots_path() -> Path: 
-    data_dir = get_root_path() / 'plots'
+
+def get_plots_path() -> Path:
+    data_dir = get_savedir_path() / 'plots'
     data_dir.mkdir(exist_ok=True)
     return data_dir
 
-def get_cache_path() -> Path: 
-    data_dir = get_root_path() / 'cache'
+
+def get_plot_stem(description: str = None) -> str:
+    timestamp = datetime.now().strftime('%y-%m-%d_%H%M%S')
+    return f'{timestamp}_{description}' if description else timestamp
+
+
+def get_cache_path() -> Path:
+    data_dir = get_savedir_path() / 'cache'
     data_dir.mkdir(exist_ok=True)
     return data_dir
+
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-DATA_TOKENIZER_PAIRS = [('text', 'bpe'), ('dna', 'bpe'), ('dna', 'kmer')]
+DATA_TOKENIZER_PAIRS = [
+    ('text', 'bpe', 'wiki'),
+    ('dna', 'bpe',  'OG2'),
+    ('dna', 'kmer', 'OG2'),
+    ('dna', 'bpe',  'ncRNA'),
+    ('dna', 'kmer', 'ncRNA'),
+    ('dna', 'bpe',  'cDNA'),
+    ('dna', 'kmer', 'cDNA')
+]
 
-def create_results_dict() -> dict: 
-    results = {}
-    for data, tok in DATA_TOKENIZER_PAIRS:
-        if data not in results.keys(): results[data] = {}
-        results[data][tok] = {}
+def run_key(data: str, tok: str, type: str) -> str:
+    return f'{data}_{tok}_{type}' if type else f'{data}_{tok}'
 
-    return results
+def create_results_dict() -> dict:
+    return {run_key(data, tok, type): {} for data, tok, type in DATA_TOKENIZER_PAIRS}

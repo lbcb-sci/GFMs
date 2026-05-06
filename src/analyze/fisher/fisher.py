@@ -7,8 +7,8 @@ from collections import defaultdict
 from torch.utils.data import DataLoader
 from transformers import BertForMaskedLM
 
-from src.analyze.data import mlm_preprocess, get_dataset_dna, get_dataset_text, DeviceWrapper
-from src.utils import create_results_dict, DATA_TOKENIZER_PAIRS
+from src.analyze.data import mlm_preprocess, get_dataset_wiki, get_dna_dataset, DeviceWrapper
+from src.utils import create_results_dict, DATA_TOKENIZER_PAIRS, run_key
 
 def fisher(all_models: dict, tokenizers: dict, args) -> dict:
     logger, n_samples, batch_size = args.logger, args.samples, args.batch_size
@@ -17,35 +17,44 @@ def fisher(all_models: dict, tokenizers: dict, args) -> dict:
 
     results = create_results_dict()
 
-    for data, tok in DATA_TOKENIZER_PAIRS:
-        models = all_models[data][tok]
-        tokenizer = tokenizers[data][tok][0]
+    for data, tok, type in DATA_TOKENIZER_PAIRS:
+        key = run_key(data, tok, type)
+        models = all_models[key]
+        tokenizer = tokenizers[key][0]
 
         assert all([model.name_or_path[:-1] == tokenizer.name_or_path[:-1] for model in models])
 
-        is_text = 'text' in tokenizer.name_or_path
+        logger.info(f' collecting dataset for {key}...')
+        if data == 'text':
+            dataset = get_dataset_wiki(n_samples, preprocessed=True)
+        else:
+            dataset = get_dna_dataset(type, n_samples)
 
-        logger.info(f' collecting dataset {"text" if is_text else "dna"}...')
-        dataset = get_dataset_text(n_samples) if is_text else get_dataset_dna(n_samples)
-        remove = ['text', 'url', 'id', 'title'] if is_text else ['text']
+        remove = ['text']
+        if 'url' in dataset.column_names: remove.append('url')
+        if 'id' in dataset.column_names: remove.append('id')
+        if 'title' in dataset.column_names: remove.append('title')
 
-        logger.info( 'masking tokens in dataset...')
+        logger.info('masking tokens in dataset...')
         preprocess = lambda batch: mlm_preprocess(batch, tokenizer, mask_prob=0.15)
         encoded = dataset.map(preprocess, batched=True, remove_columns=remove, load_from_cache_file=False)
         encoded.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
 
+        [model.to(args.device) for model in models]
+
         dataloader = DataLoader(
-            DeviceWrapper(encoded, device=models[0].device),
+            DeviceWrapper(encoded, device=args.device),
             batch_size=batch_size,
             shuffle=False,
         )
 
         fisher_information = get_fisher_information(models, dataloader, logger)
 
-        results[data][tok]['fisher'] = reduce_fisher_average_models(fisher_information)
-        results[data][tok][f'fisher_full'] = reduce_fisher(fisher_information, collapse_encoder=False)
+        results[key]['fisher'] = reduce_fisher_average_models(fisher_information)
+        results[key]['fisher_full'] = reduce_fisher(fisher_information, collapse_encoder=False)
 
         [model.cpu() for model in models]
+        print()
 
     return results
 
@@ -94,7 +103,7 @@ def get_fisher_information(
         for name in fisher_model:
             fisher_model[name] /= total_masked_tokens
 
-        fisher_information[i] = fisher_model
+        fisher_information[i] = {k: v.cpu() for k, v in fisher_model.items()}
 
         logger.info(f' total masked tokens = {total_masked_tokens}')
 

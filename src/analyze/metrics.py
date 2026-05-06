@@ -1,10 +1,11 @@
-import torch 
+import torch
 import numpy as np
 from torch import Tensor
 from functools import partial
 from scipy.spatial import procrustes
 from typing import Callable, Iterable
 from torchmetrics.functional.pairwise import pairwise_cosine_similarity
+from ckatorch.core import cka_base
 
 def cosine_similarity(A: Tensor, B: Tensor) -> Tensor:
     '''Compute all-tokens cosine similarity between two embeddings matrices.'''
@@ -73,10 +74,22 @@ def compute_pairwise(data: Iterable, metric: Callable) -> Tensor:
 
     return torch.as_tensor(results)
 
-def topk(embeddings: Tensor, k: int): 
+def topk(embeddings: Tensor, k: int):
     '''Compute pairwise Top-k Overlap.'''
 
     metric = partial(topk_overlap, k=k)
+    return meanstd(compute_pairwise(embeddings, metric))
+
+def centered_kernel_alignment(A: Tensor, B: Tensor, kernel: str) -> Tensor:
+    '''Wrapper for cka_base from `ckatorch`.'''
+
+    assert kernel in ['linear', 'rbf']
+    return cka_base(A.cpu(), B.cpu(), kernel=kernel)
+
+def cka(embeddings: Tensor, kernel: str):
+    '''Compute pairwise Centered Kernel Alignment.'''
+
+    metric = partial(centered_kernel_alignment, kernel=kernel)
     return meanstd(compute_pairwise(embeddings, metric))
 
 def meanstd(values: Iterable) -> tuple[float, float]:

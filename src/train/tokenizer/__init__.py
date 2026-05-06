@@ -1,1 +1,1 @@
-from .tokenizer import train_bpe_tokenizer, load_6mer_tokenizer, clean_text, make_iterator
+from .tokenizer import train_bpe_tokenizer, load_6mer_tokenizer, clean_text, clean_dna, make_iterator_text, make_iterator_dna

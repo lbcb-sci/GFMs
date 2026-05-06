@@ -6,8 +6,13 @@ from tokenizers.trainers import BpeTrainer
 from tokenizers.pre_tokenizers import Whitespace
 from transformers import PreTrainedTokenizerFast, AutoTokenizer
 
+
 _UNK = '<UNK>'; _PAD = '<PAD>'; _CLS = '<CLS>'; _SEP = '<SEP>'; _MASK = '<MASK>'
 _SPECIAL_TOKENS = [_UNK, _PAD, _CLS, _SEP, _MASK]
+
+_ALLOWED_TEXT = r"[^a-zA-Z0-9\s.,;:!?\"'()\-–—/\\&%$€@#\[\]{}<>]+"
+_ALLOWED_DNA = r"[^ACGTN]+"
+
 
 def train_bpe_tokenizer(iterator, vocab_size: int) -> PreTrainedTokenizerFast:
     tokenizer = Tokenizer(BPE(unk_token=_UNK))
@@ -31,24 +36,41 @@ def train_bpe_tokenizer(iterator, vocab_size: int) -> PreTrainedTokenizerFast:
 
     return fast_tokenizer
 
+
 def load_6mer_tokenizer():
     '''Load 6-mer tokenizer from Nucleotide Transformer.'''
     return AutoTokenizer.from_pretrained('InstaDeepAI/nucleotide-transformer-2.5b-multi-species')
 
-_ALLOWED = r"[^a-zA-Z0-9\s.,;:!?\"'()\-–—/\\&%$€@#\[\]{}<>]+"
 
 def clean_text(s: str) -> str:
     s = s.replace("\u00a0", " ")
     s = re.sub(r"\s+", " ", s)
-    s = re.sub(_ALLOWED, " ", s)
+    s = re.sub(_ALLOWED_TEXT, " ", s)
     return s.strip()
 
-def make_iterator(dataset: Dataset):
+
+def clean_dna(s: str) -> str:
+    s = re.sub(_ALLOWED_DNA, "N", s)
+    return s.strip()
+
+
+def make_iterator_text(dataset: Dataset):
     def iterator():
         for example in dataset:
             text = example["text"]
             if not isinstance(text, str): continue
             text = clean_text(text)
+            if text.strip(): yield text
+
+    return iterator
+
+
+def make_iterator_dna(dataset: Dataset):
+    def iterator():
+        for example in dataset:
+            text = example["text"]
+            if not isinstance(text, str): continue
+            text = clean_dna(text)
             if text.strip(): yield text
 
     return iterator
