@@ -109,7 +109,7 @@ def get_distributions(
     dataloader: DataLoader,
     logger,
 ) -> tuple[Tensor, list[float]]:
-    '''Extract distributions over masked tokens. Also computes KL div, perplexity and accuracy.'''
+    '''Extract distributions over masked tokens. Also computes KL div, entropy, perplexity and accuracy.'''
 
     result = []
     kl_values = []
@@ -143,7 +143,7 @@ def get_distributions(
 
             uniform = torch.ones_like(distributions) / distributions.shape[-1]
             total_kl += kl_divergence(uniform, distributions).sum()
-            total_entropy += -(distributions * torch.log(distributions + 1e-10)).sum()
+            total_entropy += -(distributions * torch.log2(distributions + 1e-10)).sum()
 
             dists_model.extend(distributions.cpu())
             total_correct_predictions += (distributions.argmax(-1) == labels).float().sum()
