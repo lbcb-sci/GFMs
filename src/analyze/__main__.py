@@ -19,8 +19,8 @@ def main() -> None:
     logger.info(f' args: {args}')
     logger.info(f' running on device {args.device}')
 
-    # paths = get_huggingface_paths()
-    paths = get_local_paths(shuffle=False)
+    # paths = get_huggingface_paths(args.N)
+    paths = get_local_paths(args.N, shuffle=False)
     pprint(paths)
 
     tokenizers = load_tokenizers(paths)
@@ -91,12 +91,12 @@ def parse_args():
                         help='optional description to add to the run path')
     parser.add_argument('--cache', action='store_true',
                         help='load fisher results from cache if available, save otherwise')
+    parser.add_argument('-N', '--num-models', type=int, default=5, help='number of models per dataset/tokenizer to analyze')
 
     return parser.parse_args()
 
 
-def get_huggingface_paths() -> dict:
-    N = 5
+def get_huggingface_paths(N: int) -> dict:
     username = PATHS['username']
     result = {}
 
@@ -107,8 +107,7 @@ def get_huggingface_paths() -> dict:
     return result
 
 
-def get_local_paths(shuffle: bool) -> dict:
-    N = 5
+def get_local_paths(N: int, shuffle: bool) -> dict:
     base = PATHS['analyze']
     suffix = 'shuffle' if shuffle else 'nonshuffle'
     result = {}
