@@ -5,6 +5,7 @@ import argparse
 from src.utils import get_logger, get_config_4M, get_config_20M, get_config_90M, get_config_90M_noT
 from .train import train
 
+
 def main() -> None:
     cmdargs = parse_cmdline_args()
     logger = get_logger('<train>')
@@ -34,10 +35,13 @@ def main() -> None:
 
     train(cmdargs.type, **args)
 
+
 def parse_cmdline_args():
     parser = argparse.ArgumentParser(description='Train N BERT models on either text or dna.')
     parser.add_argument('--type', type=str, required=True, 
                         choices=['text', 'dna'], help='whether to train on text or dna')
+    parser.add_argument('--data', type=str, required=True,
+                        choices=['wiki', 'og2', 'ncrna', 'cdna'], help='which dataset to train on')
     parser.add_argument('--tokenizer', type=str, required=True, 
                         choices=['kmer', 'bpe'], help='the tokenizer to use, bpe or k-mer')
     parser.add_argument('--size', type=str, required=False, default='90M', 
@@ -45,5 +49,6 @@ def parse_cmdline_args():
     parser.add_argument('--description', type=str, required=False, default=None,
                         help='optional description to add to the run path')
     return parser.parse_args()
+
 
 if __name__ == '__main__': main()

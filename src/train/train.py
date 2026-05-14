@@ -14,7 +14,7 @@ from datasets import load_from_disk
 from .tokenizer import train_bpe_tokenizer, load_6mer_tokenizer, make_iterator_text, make_iterator_dna, clean_text, clean_dna
 from src.utils import count_parameters, get_run_path, get_training_args
 from src.utils.paths import PATHS
-from .data import get_dataset_wiki, get_dataset_opengenome, get_dataset_ensembl
+from .data import get_dataset_wiki, get_dataset_opengenome, get_dataset_ensembl, get_dataset_ncrna
 from .callback import FisherCallback, ThroughputCallback
 
 
@@ -37,6 +37,9 @@ def train(type: str, **args) -> None:
     logger.info(' getting tokenizer...')
 
     if is_text:
+        assert tokenizer_name == 'bpe', ' for text only bpe tokenizer is supported'
+        assert args.data == 'wiki', ' for text only wiki dataset is supported'
+
         preprocessed_path = PATHS['wiki_dataset']
         logger.info(f' loading preprocessed text dataset from {preprocessed_path}')
         dataset_train, dataset_eval = get_dataset_wiki(train_size, eval_size, preprocessed=True)
@@ -77,13 +80,20 @@ def train(type: str, **args) -> None:
         logger.info(f' shortest tokenized evaluation example has {min([len(s) for s in eval_encoded["input_ids"]])} tokens\n')
 
     else:
-        preprocessed_path = PATHS['og2_dataset']
-        logger.info(f' loading preprocessed DNA dataset from {preprocessed_path}')
-        dataset_train, dataset_eval = get_dataset_opengenome(train_size, eval_size)
+        assert args.data in ['og2', 'ncrna', 'cdna'], ' for dna dataset must be one of og2, ncrna, cdna'
 
-        # preprocessed_path = PATHS['ensembl_dataset']
-        # logger.info(f' loading preprocessed DNA dataset from {preprocessed_path}')
-        # dataset_train, dataset_eval = get_dataset_ensembl(train_size, eval_size)
+        if args.data == 'og2':
+            preprocessed_path = PATHS['og2_dataset']
+            logger.info(f' loading preprocessed DNA dataset from {preprocessed_path}')
+            dataset_train, dataset_eval = get_dataset_opengenome(train_size, eval_size)
+        elif args.data == 'ncrna':
+             preprocessed_path = PATHS['ncrna_dataset']
+             logger.info(f' loading preprocessed DNA dataset from {preprocessed_path}')
+             dataset_train, dataset_eval = get_dataset_ncrna(train_size, eval_size)
+        elif args.data == 'cdna':
+            preprocessed_path = PATHS['ensembl_dataset']
+            logger.info(f' loading preprocessed DNA dataset from {preprocessed_path}')
+            dataset_train, dataset_eval = get_dataset_ensembl(train_size, eval_size)
 
         if tokenizer_name == 'bpe':
             dna_bpe_path = PATHS['dna_bpe_tokenizer']  # Path('/home/vrcekl/scratch/GFMs/bpe_dna_tokenizer')
