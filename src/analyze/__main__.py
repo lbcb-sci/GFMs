@@ -1,4 +1,5 @@
 import argparse
+from pathlib import Path
 from pprint import pprint
 from transformers import BertConfig, BertForMaskedLM, AutoTokenizer
 
@@ -6,6 +7,7 @@ import src.analyze as analyze
 from src.analyze.plotting import *
 import torch
 from src.utils import get_logger, count_parameters, DATA_TOKENIZER_PAIRS, get_plot_stem, get_cache_path, run_key
+from src.utils.paths import PATHS
 
 
 def main() -> None:
@@ -94,7 +96,8 @@ def parse_args():
 
 
 def get_huggingface_paths() -> dict:
-    N = 5; username = 'mrochk'
+    N = 5
+    username = PATHS['username']
     result = {}
 
     for data, tok, type in DATA_TOKENIZER_PAIRS:
@@ -106,7 +109,7 @@ def get_huggingface_paths() -> dict:
 
 def get_local_paths(shuffle: bool) -> dict:
     N = 5
-    base = Path('/home/vrcekl/scratch/GFMs/analyze/')
+    base = PATHS['analyze']
     suffix = 'shuffle' if shuffle else 'nonshuffle'
     result = {}
 

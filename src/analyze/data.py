@@ -42,6 +42,15 @@ def get_dataset_wiki(n: int, preprocessed: bool = True):
     return dataset_test
 
 
+def get_text_dataset(n: int, preprocessed: bool = True):
+    if preprocessed:
+        path = PATHS['og2_dataset']
+        dataset_test = get_test_split(n, path)
+    else:
+        cache_dir = PATHS['cache_dir']
+        dataset_test = get_dataset('mrochk/opengenome-clean', name=None, n=n, cache_dir=cache_dir)
+    return dataset_test
+
 def get_dataset_opengenome(n: int):
     path = PATHS['og2_dataset']
     return get_test_split(n, path)
@@ -62,10 +71,8 @@ def get_dna_dataset(type: str, n: int):
         return get_dataset_opengenome(n)
     elif type == 'cDNA':
         return get_dataset_ensembl(n)
-        # return get_dataset_opengenome(n)
     elif type == 'ncRNA':
         return get_dataset_ncrna(n)
-        # return get_dataset_opengenome(n)
     else:
         raise ValueError(f'unknown DNA dataset type: {type}')
 

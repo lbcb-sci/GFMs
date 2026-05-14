@@ -280,19 +280,19 @@ def plot_full_fisher_information(results: dict, stem: str = ''):
         ax.set_xticks(y_pos)
         ax.margins(x=0.02)
         ax.set_yticks([0.0, 0.5, 1.0])
-        ax.tick_params(axis='y', labelsize=11)
+        ax.tick_params(axis='y', labelsize=12)
 
         if row == 1:
             ax.xaxis.set_major_formatter(FuncFormatter(_fmt_x))
-            ax.tick_params(axis='x', labelrotation=90, labelsize=10)
+            ax.tick_params(axis='x', labelrotation=90, labelsize=12)
         else:
             ax.set_xticklabels([])
             ax.tick_params(axis='x', length=0)
 
     for ax in axes[1]:
-        ax.set_xlabel('Layer', fontsize=12)
+        ax.set_xlabel('Layer', fontsize=14)
     for ax in axes[:, 0]:
-        ax.set_ylabel('Normalized Fisher Information', fontsize=12)
+        ax.set_ylabel('Normalized Fisher Information', fontsize=14)
 
     fig.canvas.draw()
     _savefig('full_fisher', stem)
@@ -322,19 +322,19 @@ def plot_average_distribution(results: dict, stem: str = ''):
 
         ax.bar(range(1, len(dist) + 1), dist, color=_DATASET_COLORS[type],
                width=1.0, edgecolor='black', linewidth=0.4)
-        ax.set_title(_DATASET_LABELS[key], fontsize=12, pad=3)
+        ax.set_title(_DATASET_LABELS[key], fontsize=14, pad=3)
         ax.margins(x=0.02)
         ax.set_xticks([1, n // 2, n])
-        ax.tick_params(axis='both', labelsize=11)
+        ax.tick_params(axis='both', labelsize=12)
 
         ymax = float(dist.max())
         decimals = 3 if i in (1, 2) else 2
         ax.set_yticks([0, round(ymax / 2, decimals), round(ymax, decimals)])
 
         if ax in last_row_axes:
-            ax.set_xlabel('Token Rank', fontsize=12)
+            ax.set_xlabel('Token Rank', fontsize=14)
 
-    fig.text(0.02, 0.5, 'Average Softmax Probability', va='center', rotation='vertical', fontsize=12)
+    fig.text(0.02, 0.5, 'Average Softmax Probability', va='center', rotation='vertical', fontsize=14)
     plt.subplots_adjust(left=0.10, top=0.95, bottom=0.08, right=0.97)
     _savefig('dist', stem)
     plt.close()
