@@ -85,6 +85,10 @@ def train(type: str, **args) -> None:
         # logger.info(f' loading preprocessed DNA dataset from {preprocessed_path}')
         # dataset_train, dataset_eval = get_dataset_ensembl(train_size, eval_size)
 
+        # preprocessed_path = PATHS['ncrna_dataset']
+        # logger.info(f' loading preprocessed DNA dataset from {preprocessed_path}')
+        # dataset_train, dataset_eval = get_dataset_ncrna(train_size, eval_size)
+
         if tokenizer_name == 'bpe':
             dna_bpe_path = PATHS['dna_bpe_tokenizer']  # Path('/home/vrcekl/scratch/GFMs/bpe_dna_tokenizer')
             if dna_bpe_path.exists():

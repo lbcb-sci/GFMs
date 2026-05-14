@@ -53,3 +53,8 @@ def get_dataset_opengenome(train_size: int, eval_size: int):
 def get_dataset_ensembl(train_size: int, eval_size: int):
     path = PATHS['ensembl_dataset']
     return get_train_eval_split(train_size, eval_size, path)
+
+
+def get_dataset_ncrna(train_size: int, eval_size: int):
+    path = PATHS['ncrna_dataset']
+    return get_train_eval_split(train_size, eval_size, path)
