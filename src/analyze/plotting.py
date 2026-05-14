@@ -5,6 +5,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from matplotlib.ticker import FuncFormatter
+from matplotlib.gridspec import GridSpec
 
 from src.utils import get_plots_path, DATA_TOKENIZER_PAIRS, run_key
 
@@ -22,17 +23,24 @@ COLOR_DNA_KMER = COLOR_DNA_BPE
 # Colors and legend for the dataset-type barplots
 _DATASET_COLORS = {'wiki': '#56B4E9', 'OG2': '#E69F00', 'ncRNA': '#D55E00', 'cDNA': '#CC3311'}
 _DATASET_LEGEND = {'#56B4E9': 'Wikipedia', '#E69F00': 'OpenGenome2', '#D55E00': 'ncRNA', '#CC3311': 'cDNA'}
-# _DATASET_COLORS = {'wiki': '#56B4E9', 'OG2': '#E69F00', 'ncRNA': '#D55E00', 'cDNA': '#882200'}
-# _DATASET_LEGEND = {'#56B4E9': 'Wikipedia', '#E69F00': 'OpenGenome2', '#D55E00': 'ncRNA', '#882200': 'cDNA'}
 _TYPE_DISPLAY = {'OG2': 'OpenGenome2', 'ncRNA': 'ncRNA', 'cDNA': 'cDNA'}
+def _dataset_label(data, tok, type):
+    domain = "Text" if data == "text" else "DNA"
+    tokenizer = "BPE" if tok == "bpe" else "k-mer"
+    suffix = " " + _TYPE_DISPLAY.get(type, type) if type else ""
+    return f"{domain} {tokenizer}{suffix}"
+
 _DATASET_LABELS = {
-    run_key(data, tok, type): f'{"Text" if data == "text" else "DNA"} {"BPE" if tok == "bpe" else "k-mer"}{" " + _TYPE_DISPLAY.get(type, type) if type else ""}'
+    run_key(data, tok, type): _dataset_label(data, tok, type)
     for data, tok, type in DATA_TOKENIZER_PAIRS
 }
 
 
-def barplot(ax_or_fig, *lists, labels=None, colors=None, hatches=None, legend=None, title=None, ylabel="Value",
-            legend_loc='best', legend_fontsize=9, ylim=None, tick_fontsize=10, ylabel_fontsize=10, figsize=(8, 5)):
+def barplot(
+    ax_or_fig, *lists, labels=None, colors=None, hatches=None, legend=None,
+    title=None, ylabel="Value", legend_loc='best', legend_fontsize=9,
+    ylim=None, tick_fontsize=10, ylabel_fontsize=10, figsize=(8, 5),
+):
     '''Bar plot with per-bar mean ± std annotations. Pass ax=None to create a new figure.'''
     means = [np.mean(lst) for lst in lists]
     stds  = [np.std(lst, ddof=1) if len(lst) > 1 else 0.0 for lst in lists]
@@ -77,7 +85,7 @@ def barplot(ax_or_fig, *lists, labels=None, colors=None, hatches=None, legend=No
 
     if hatches and len(set(bar_hatches)) > 1:
         hatch_handles = [
-            Patch(facecolor='white', edgecolor='black', hatch='',  label='BPE'),
+            Patch(facecolor='white', edgecolor='black', hatch='', label='BPE'),
             Patch(facecolor='white', edgecolor='black', hatch='////', label=r'$k$-mer'),
         ]
         ax.legend(handles=hatch_handles, loc='upper right', fontsize=legend_fontsize)
@@ -96,9 +104,9 @@ def barplot(ax_or_fig, *lists, labels=None, colors=None, hatches=None, legend=No
 def plot_kl_divergence(results: dict, stem: str = '') -> None:
     init()
 
-    lists  = [results[run_key(data, tok, type)]['kl'] for data, tok, type in DATA_TOKENIZER_PAIRS]
-    labels = [_DATASET_LABELS[run_key(data, tok, type)]   for data, tok, type in DATA_TOKENIZER_PAIRS]
-    colors = [_DATASET_COLORS[type]                        for _, _, type in DATA_TOKENIZER_PAIRS]
+    lists = [results[run_key(d, t, ty)]['kl'] for d, t, ty in DATA_TOKENIZER_PAIRS]
+    labels = [_DATASET_LABELS[run_key(d, t, ty)] for d, t, ty in DATA_TOKENIZER_PAIRS]
+    colors = [_DATASET_COLORS[ty] for _, _, ty in DATA_TOKENIZER_PAIRS]
 
     fig, ax = barplot(None, *lists, labels=labels, colors=colors,
                       legend=_DATASET_LEGEND, ylabel="KL divergence")
@@ -107,13 +115,14 @@ def plot_kl_divergence(results: dict, stem: str = '') -> None:
     _savefig('kl_divergence', stem)
     plt.close()
 
+
 def plot_entropy(results: dict, stem: str = '') -> None:
     init()
 
-    lists  = [results[run_key(data, tok, type)]['entropy'] for data, tok, type in DATA_TOKENIZER_PAIRS]
-    labels = [_DATASET_LABELS[run_key(data, tok, type)]    for data, tok, type in DATA_TOKENIZER_PAIRS]
-    colors = [_DATASET_COLORS[type]                         for _, _, type in DATA_TOKENIZER_PAIRS]
-    hatches = ['/' if tok == 'kmer' else '' for _, tok, _ in DATA_TOKENIZER_PAIRS]
+    lists = [results[run_key(d, t, ty)]['entropy'] for d, t, ty in DATA_TOKENIZER_PAIRS]
+    labels = [_DATASET_LABELS[run_key(d, t, ty)] for d, t, ty in DATA_TOKENIZER_PAIRS]
+    colors = [_DATASET_COLORS[ty] for _, _, ty in DATA_TOKENIZER_PAIRS]
+    hatches = ['/' if t == 'kmer' else '' for _, t, _ in DATA_TOKENIZER_PAIRS]
 
     fig, ax = barplot(None, *lists, labels=labels, colors=colors, hatches=hatches,
                       legend=_DATASET_LEGEND, ylabel="Entropy (bits)",
@@ -123,6 +132,7 @@ def plot_entropy(results: dict, stem: str = '') -> None:
     plt.tight_layout()
     _savefig('entropy', stem)
     plt.close()
+
 
 def init():
     sns.set_style('white')
@@ -137,6 +147,7 @@ def init():
         "legend.fontsize": 9,
     })
 
+
 def order_fisher(fisher: dict):
     x, y = ['embeddings'], [fisher['embeddings']]
     x.append('encoder')
@@ -144,6 +155,7 @@ def order_fisher(fisher: dict):
     x.append('head')
     y.append(fisher['head'])
     return x, np.array(y)
+
 
 def order_fisher_full(fisher: dict):
     x, y = ['embeddings'], [fisher['embeddings']]
@@ -158,6 +170,7 @@ def order_fisher_full(fisher: dict):
     y.append(fisher['head'])
 
     return x, np.array(y)
+
 
 def plot_fisher_information(results: dict, stem: str = ''):
     init()
@@ -229,6 +242,7 @@ def plot_fisher_information(results: dict, stem: str = ''):
     _savefig('fisher', stem)
     plt.close()
 
+
 def plot_full_fisher_information(results: dict, stem: str = ''):
     # 2x2 grid; one cell per dataset type; bars show mean across 5 models
     _cells = [
@@ -298,10 +312,10 @@ def plot_full_fisher_information(results: dict, stem: str = ''):
     _savefig('full_fisher', stem)
     plt.close()
 
+
 def plot_average_distribution(results: dict, stem: str = ''):
     init()
 
-    from matplotlib.gridspec import GridSpec
     n_rows = 4
     fig = plt.figure(figsize=(12, 2.2 * n_rows))
     gs = GridSpec(n_rows, 4, figure=fig, hspace=0.5, wspace=0.5)
@@ -338,6 +352,7 @@ def plot_average_distribution(results: dict, stem: str = ''):
     plt.subplots_adjust(left=0.10, top=0.95, bottom=0.08, right=0.97)
     _savefig('dist', stem)
     plt.close()
+
 
 def plot_jensen_shannon(results: dict, stem: str = ''):
     init()
@@ -385,103 +400,106 @@ def plot_jensen_shannon(results: dict, stem: str = ''):
     _savefig('js', stem)
     plt.close()
 
-def plot_attention_entropies(text, dna_bpe, dna_kmer, stem: str = ''):
-    fig, ax = plt.subplots(1, figsize=(7, 7))
 
-    x = list(sorted(list(text.keys())))
+# def plot_attention_entropies(text, dna_bpe, dna_kmer, stem: str = ''):
+#     fig, ax = plt.subplots(1, figsize=(7, 7))
 
-    ytext     = [text[l].item() for l in x]
-    ydna_bpe  = [dna_bpe[l].item() for l in x]
-    ydna_kmer = [dna_kmer[l].item() for l in x]
+#     x = list(sorted(list(text.keys())))
 
-    minval = min([min(ytext), min(ydna_bpe), min(ydna_kmer)]) - 0.1
-    maxval = max([max(ytext), max(ydna_bpe), max(ydna_kmer)]) + 0.1
+#     ytext     = [text[l].item() for l in x]
+#     ydna_bpe  = [dna_bpe[l].item() for l in x]
+#     ydna_kmer = [dna_kmer[l].item() for l in x]
 
-    ax.set_ylim((minval, maxval))
+#     minval = min([min(ytext), min(ydna_bpe), min(ydna_kmer)]) - 0.1
+#     maxval = max([max(ytext), max(ydna_bpe), max(ydna_kmer)]) + 0.1
 
-    ax.plot(x, ytext, color=COLOR_TEXT, label='Text')
-    ax.scatter(x, ytext, color=COLOR_TEXT)
+#     ax.set_ylim((minval, maxval))
 
-    ax.plot(x, ydna_bpe, color=COLOR_DNA_BPE, label='DNA (BPE)')
-    ax.scatter(x, ydna_bpe, color=COLOR_DNA_BPE)
+#     ax.plot(x, ytext, color=COLOR_TEXT, label='Text')
+#     ax.scatter(x, ytext, color=COLOR_TEXT)
 
-    ax.plot(x, ydna_kmer, color=COLOR_DNA_BPE, linestyle='--', label='DNA (k-mer)')
-    ax.scatter(x, ydna_kmer, color=COLOR_DNA_BPE)
+#     ax.plot(x, ydna_bpe, color=COLOR_DNA_BPE, label='DNA (BPE)')
+#     ax.scatter(x, ydna_bpe, color=COLOR_DNA_BPE)
 
-    ax.set_xlabel('Transformer Layer')
-    ax.set_ylabel('Mean Entropy')
+#     ax.plot(x, ydna_kmer, color=COLOR_DNA_BPE, linestyle='--', label='DNA (k-mer)')
+#     ax.scatter(x, ydna_kmer, color=COLOR_DNA_BPE)
 
-    ax.legend()
+#     ax.set_xlabel('Transformer Layer')
+#     ax.set_ylabel('Mean Entropy')
 
-    fig.tight_layout()
-    _savefig('attn_entropy', stem)
+#     ax.legend()
 
-def plot_attention_scores(text, dna_bpe, dna_kmer, stem: str = ''):
-    fig, axes = plt.subplots(3, figsize=(10, 22))
+#     fig.tight_layout()
+#     _savefig('attn_entropy', stem)
 
-    minval = 0.0
-    maxval = max([text.max(), dna_bpe.max(), dna_kmer.max()])+0.1
 
-    for ax, matrix, title in zip(axes, [text, dna_bpe, dna_kmer],
-        ['Text', "DNA (BPE)", "DNA (KMER)"]):
+# def plot_attention_scores(text, dna_bpe, dna_kmer, stem: str = ''):
+#     fig, axes = plt.subplots(3, figsize=(10, 22))
+
+#     minval = 0.0
+#     maxval = max([text.max(), dna_bpe.max(), dna_kmer.max()])+0.1
+
+#     for ax, matrix, title in zip(axes, [text, dna_bpe, dna_kmer],
+#         ['Text', "DNA (BPE)", "DNA (KMER)"]):
     
-        sns.heatmap(
-            matrix, 
-            annot=True, 
-            fmt='.2f', 
-            cmap='viridis', 
-            vmin=minval, vmax=maxval,
-            ax=ax,
-            xticklabels=[f"L{(j+1)}" for j in range(matrix.shape[1])], 
-            yticklabels=[f"L{(i+1)}" for i in range(matrix.shape[0])],
-        )
+#         sns.heatmap(
+#             matrix, 
+#             annot=True, 
+#             fmt='.2f', 
+#             cmap='viridis', 
+#             vmin=minval, vmax=maxval,
+#             ax=ax,
+#             xticklabels=[f"L{(j+1)}" for j in range(matrix.shape[1])], 
+#             yticklabels=[f"L{(i+1)}" for i in range(matrix.shape[0])],
+#         )
 
-        ax.set_title(title)
+#         ax.set_title(title)
 
-    #fig.suptitle('Mutual Information (MI) Between Attention Scores')
-    fig.tight_layout()
-    _savefig('attn', stem)
+#     #fig.suptitle('Mutual Information (MI) Between Attention Scores')
+#     fig.tight_layout()
+#     _savefig('attn', stem)
 
-def plot_mi_matrix_full(mim_text, mim_dna_bpe, mim_dna_kmer, num_models, num_layers, model_names=None, stem: str = ''):
-    if model_names is None:
-        model_names = [f"M{i+1}" for i in range(num_models)]
 
-    matrices = [mim_text, mim_dna_bpe, mim_dna_kmer]
-    titles = ['Text', 'DNA BPE', 'DNA k-mer']
+# def plot_mi_matrix_full(mim_text, mim_dna_bpe, mim_dna_kmer, num_models, num_layers, model_names=None, stem: str = ''):
+#     if model_names is None:
+#         model_names = [f"M{i+1}" for i in range(num_models)]
 
-    tick_positions = [l * num_models + m for l in range(num_layers) for m in range(num_models)]
-    tick_labels = [f"{model_names[m]}L{l+1}" for l in range(num_layers) for m in range(num_models)]
+#     matrices = [mim_text, mim_dna_bpe, mim_dna_kmer]
+#     titles = ['Text', 'DNA BPE', 'DNA k-mer']
 
-    # Shared color scale across all 3 matrices
-    vmin = min(m.min() for m in matrices)
+#     tick_positions = [l * num_models + m for l in range(num_layers) for m in range(num_models)]
+#     tick_labels = [f"{model_names[m]}L{l+1}" for l in range(num_layers) for m in range(num_models)]
 
-    vmax = 0.0
-    for i in range(mim_text.shape[0]):
-        for j in range(mim_text.shape[1]):
-            if i == j: continue
-            if mim_text[i, j] > vmax: vmax = mim_text[i, j]
+#     # Shared color scale across all 3 matrices
+#     vmin = min(m.min() for m in matrices)
 
-    vmax += 0.1
+#     vmax = 0.0
+#     for i in range(mim_text.shape[0]):
+#         for j in range(mim_text.shape[1]):
+#             if i == j: continue
+#             if mim_text[i, j] > vmax: vmax = mim_text[i, j]
 
-    fig, axes = plt.subplots(3, 1, figsize=(12, 28))
+#     vmax += 0.1
 
-    for ax, matrix, title in zip(axes, matrices, titles):
-        im = ax.imshow(matrix, aspect='auto', cmap='viridis', vmin=vmin, vmax=vmax)
-        plt.colorbar(im, ax=ax, label='MI Score')
+#     fig, axes = plt.subplots(3, 1, figsize=(12, 28))
 
-        ax.set_xticks(tick_positions)
-        ax.set_xticklabels(tick_labels, rotation=90, fontsize=7)
-        ax.set_yticks(tick_positions)
-        ax.set_yticklabels(tick_labels, fontsize=7)
+#     for ax, matrix, title in zip(axes, matrices, titles):
+#         im = ax.imshow(matrix, aspect='auto', cmap='viridis', vmin=vmin, vmax=vmax)
+#         plt.colorbar(im, ax=ax, label='MI Score')
 
-        for l in range(1, num_layers):
-            pos = l * num_models - 0.5
-            ax.axhline(pos, color='white', linewidth=0.8, linestyle='--')
-            ax.axvline(pos, color='white', linewidth=0.8, linestyle='--')
+#         ax.set_xticks(tick_positions)
+#         ax.set_xticklabels(tick_labels, rotation=90, fontsize=7)
+#         ax.set_yticks(tick_positions)
+#         ax.set_yticklabels(tick_labels, fontsize=7)
 
-        ax.set_title(f'MI Matrix — {title}')
+#         for l in range(1, num_layers):
+#             pos = l * num_models - 0.5
+#             ax.axhline(pos, color='white', linewidth=0.8, linestyle='--')
+#             ax.axvline(pos, color='white', linewidth=0.8, linestyle='--')
 
-    plt.tight_layout()
-    _savefig('mi_matrix_full', stem)
-    plt.close()
-    #plt.show()
+#         ax.set_title(f'MI Matrix — {title}')
+
+#     plt.tight_layout()
+#     _savefig('mi_matrix_full', stem)
+#     plt.close()
+#     #plt.show()
