@@ -1,0 +1,15 @@
+[project]
+name = "discriminator"
+version = "0.1.0"
+description = "Training binary discriminators on DNA sequences."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "datasets>=4.8.4",
+    "matplotlib>=3.10.8",
+    "seaborn>=0.13.2",
+    "tokenizers>=0.22.2",
+    "torch>=2.11.0",
+    "transformers>=5.5.4",
+    "wandb>=0.26.0",
+]
