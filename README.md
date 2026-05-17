@@ -7,7 +7,6 @@ used tokenization scheme for genomic language models in practice.
 
 Then, we analyze and compare text models to DNA models with respect to their output distributions, static word embeddings, contextual embeddings, and Fisher information concentration.
 
-
 ## Setup
 
 This project was built with `uv`, you can also run it with your usual Python environment.
@@ -83,3 +82,18 @@ We look at the concentration of Fisher Information with respect to each layer.
 ```bash
 uv run -m src.analyze --type fisher --samples <NSAMPLES> --batch_size <BATCH_SIZE>
 ```
+
+## Discriminator
+
+The code for training the discriminator used to reweight OpenGenome2 is located in the `discriminator` directory.
+
+The provided scripts should be called in this order:
+- `preprocess.py`
+- `train.py`
+- `inference.py`
+
+This will generate a weighted dataset made of a `text` (the dna sequence) and `weight` (the "information score" derived from the discriminator logits) columns.
+
+You can then use it to train your LM of choice on it, for example by passing the weights to a PyTorch `WeightedRandomSampler` object (see https://docs.pytorch.org/docs/2.12/data.html#torch.utils.data.WeightedRandomSampler for more information).
+
+The discriminator architecture and different settings can be modified in `config.py` and `model.py`.  
