@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from discriminator.paths import PATHS
 
 Pmain = SimpleNamespace(
     length=512*6,
@@ -22,7 +23,7 @@ Pdata = SimpleNamespace(
     split_sizes=[100_000, 100_000, 500_000, 500_000, 500_000],
     calibrate_size=100_000,
     calibrate_ratio=0.05,
-    save_path='/root/discriminator/.cache/dataset',
+    save_path=PATHS['save_path'],
 )
 
 assert len(Pdata.split_ratios) == len(Pdata.split_sizes)

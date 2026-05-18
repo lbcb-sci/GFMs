@@ -1,10 +1,17 @@
 from typing import Optional
 from torch.multiprocessing import cpu_count
 from transformers import PreTrainedTokenizerFast
-from datasets import Dataset, DatasetDict, load_dataset, concatenate_datasets, load_from_disk
+from datasets import (
+    Dataset, 
+    DatasetDict, 
+    load_dataset, 
+    load_from_disk,
+    concatenate_datasets, 
+)
 
 from discriminator.tokenizer import make_preprocess
 from discriminator.config import Pdata
+from discriminator.paths import PATHS
 
 def select(ds: Dataset, n: Optional[int] = None) -> Dataset:
     col = ds.column_names[0]
@@ -12,11 +19,11 @@ def select(ds: Dataset, n: Optional[int] = None) -> Dataset:
     return ds.rename_column(col, 'text') if col != 'text' else ds
 
 def get_real(n: Optional[int] = None) -> Dataset:
-    ds = concatenate_datasets(list(load_dataset('mrochk/opengenome-clean').values()))
+    ds = concatenate_datasets(list(load_dataset(f'{PATHS["username"]}/opengenome-clean').values()))
     return select(ds, n)
 
 def get_cdna(n: Optional[int] = None) -> Dataset:
-    ds = load_from_disk('/root/ensembl_cdna_chunks')
+    ds = load_from_disk(PATHS['ensembl_dataset'])
     return select(ds, n)
 
 def preprocess_dataset(dataset: Dataset, tokenizer: PreTrainedTokenizerFast, real: bool):
