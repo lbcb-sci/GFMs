@@ -27,6 +27,7 @@ def main() -> None:
     args['logger'] = logger
     args['tokenizer_name'] = cmdargs.tokenizer
     args['description'] = cmdargs.description
+    args['data'] = cmdargs.data
 
     logger.info(f' training on {cmdargs.type}')
     logger.info(f' training on {args["epochs"]*args["train_size"]*args["max_length"]:,} tokens')

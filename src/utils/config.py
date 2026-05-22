@@ -71,11 +71,11 @@ N = 5
 base = {
     'N': N,    # number of models to train
     'kmer': 6, # vocab size = 4**kmer + special tokens
-    'epochs': 5,
+    'epochs': 10,
     'batch_size': 96,
     'max_length': 512,
     'eval_size': 10_000,
-    'train_size': 2_000_000,
+    'train_size': 1_000_000,
     # 5 * 512 * 2M = 5.12b tokens
 }
 

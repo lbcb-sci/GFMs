@@ -16,6 +16,8 @@ def get_dataset(dataset: str, name: str, cache_dir: str, train_size: int, eval_s
 
 def get_train_eval_split(train_size: int, eval_size: int, path: Path):
     dataset_full = load_from_disk(path)
+    if train_size + eval_size > len(dataset_full):
+        raise ValueError(f' train_size + eval_size must be <= {len(dataset_full)}')
     dataset_train = dataset_full.select(range(train_size))
     dataset_eval  = dataset_full.select(range(train_size, train_size + eval_size))
     return dataset_train, dataset_eval

@@ -4,9 +4,10 @@ _scratch = Path('scratch')
 _data    = Path('data')
 
 PATHS = {
-    'text_bpe_tokenizer':  _scratch / 'bpe_text_tokenizer',
-    'dna_bpe_tokenizer':   _scratch / 'bpe_dna_tokenizer',
-    'dna_lcp_tokenizer':   _scratch / 'lcp_dna_tokenizer',
+    # 'text_bpe_tokenizer':  _scratch / 'bpe_text_tokenizer',
+    # 'dna_bpe_tokenizer':   _scratch / 'bpe_dna_tokenizer',
+    # 'dna_lcp_tokenizer':   _scratch / 'lcp_dna_tokenizer',
+    'tokenizers':          _scratch / 'tokenizers',
     'checkpoints':         _scratch / 'checkpoints',
     'analyze':             _scratch / 'analyze',
     'savedir':             _scratch,

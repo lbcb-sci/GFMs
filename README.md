@@ -16,6 +16,11 @@ You can install `uv` here: https://docs.astral.sh/uv/getting-started/installatio
 
 After installing `uv`, you can directly run the commands below, it will install the dependencies automatically from `pyproject.toml` and `uv.lock` file.
 
+## Data
+
+Before training the models, you will need to download the data.
+The OpenGenome2 eukaryotic genic windows are available on HuggingFace, while ncRNA and cDNA data were downloaded from Ensembl. For eexample, for cDNA data, run the `scripts/download_ensembl_cdna.sh` script and save the sequences into `scratch/ensembl_cdna` directory. Then, run `scripts/preprocess_fasta.py` script, which will prepare the FASTA into a HuggingFace dataset. Similar can be donw for ncRNA data.
+
 ## Usage
 
 There are two main modules in `src`: `train` and `analyze`. They should be called as Python modules (with `-m`).
