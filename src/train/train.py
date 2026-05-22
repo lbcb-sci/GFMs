@@ -159,8 +159,8 @@ def _train(
     logger = args['logger']
     logger.info(f' model config: {bertconfig}')
     N = args['N']
-    run_key = run_key(prefix, args['tokenizer_name'], args['data'])  # e.g. text_bpe_wiki, dna_bpe_og2, etc.
-    save_path = get_run_path(run_key=run_key, description=args.get('description'))
+    run = run_key(prefix, args['tokenizer_name'], args['data'])  # e.g. text_bpe_wiki, dna_bpe_og2, etc.
+    save_path = get_run_path(run_key=run, description=args.get('description'))
 
     # last_ckpt = get_last_("")
     # print(f'Resumingf from:', last_ckpt)
