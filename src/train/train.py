@@ -12,7 +12,7 @@ from transformers import DataCollatorForLanguageModeling, Trainer, set_seed
 from datasets import load_from_disk
 
 from .tokenizer import train_bpe_tokenizer, load_6mer_tokenizer, make_iterator_text, make_iterator_dna, clean_text, clean_dna
-from src.utils import count_parameters, get_run_path, get_training_args
+from src.utils import count_parameters, get_run_path, get_training_args, run_key
 from src.utils.paths import PATHS
 from .data import get_dataset_wiki, get_dataset_opengenome, get_dataset_ensembl, get_dataset_ncrna
 from .callback import FisherCallback, ThroughputCallback
@@ -38,13 +38,15 @@ def train(type: str, **args) -> None:
 
     if is_text:
         assert tokenizer_name == 'bpe', ' for text only bpe tokenizer is supported'
-        assert args.data == 'wiki', ' for text only wiki dataset is supported'
+        assert args['data'] == 'wiki', ' for text only wiki dataset is supported'
 
         preprocessed_path = PATHS['wiki_dataset']
         logger.info(f' loading preprocessed text dataset from {preprocessed_path}')
         dataset_train, dataset_eval = get_dataset_wiki(train_size, eval_size, preprocessed=True)
 
-        text_bpe_path = PATHS['text_bpe_tokenizer']  # Path('/home/vrcekl/scratch/GFMs/bpe_text_tokenizer')
+        tokenizer_path = PATHS['tokenizers']
+        tokenizer_name = run_key(type, tokenizer_name, args['data'])  # e.g. text_bpe_wiki
+        text_bpe_path = tokenizer_path / tokenizer_name
         if text_bpe_path.exists():
             logger.info(f' loading text bpe tokenizer from {text_bpe_path}')
             tokenizer = PreTrainedTokenizerFast.from_pretrained(text_bpe_path)
@@ -80,23 +82,25 @@ def train(type: str, **args) -> None:
         logger.info(f' shortest tokenized evaluation example has {min([len(s) for s in eval_encoded["input_ids"]])} tokens\n')
 
     else:
-        assert args.data in ['og2', 'ncrna', 'cdna'], ' for dna dataset must be one of og2, ncrna, cdna'
+        assert args['data'] in ['og2', 'ncrna', 'cdna'], ' for dna dataset must be one of og2, ncrna, cdna'
 
-        if args.data == 'og2':
+        if args['data'] == 'og2':
             preprocessed_path = PATHS['og2_dataset']
             logger.info(f' loading preprocessed DNA dataset from {preprocessed_path}')
             dataset_train, dataset_eval = get_dataset_opengenome(train_size, eval_size)
-        elif args.data == 'ncrna':
+        elif args['data'] == 'ncrna':
              preprocessed_path = PATHS['ncrna_dataset']
              logger.info(f' loading preprocessed DNA dataset from {preprocessed_path}')
              dataset_train, dataset_eval = get_dataset_ncrna(train_size, eval_size)
-        elif args.data == 'cdna':
+        elif args['data'] == 'cdna':
             preprocessed_path = PATHS['ensembl_dataset']
             logger.info(f' loading preprocessed DNA dataset from {preprocessed_path}')
             dataset_train, dataset_eval = get_dataset_ensembl(train_size, eval_size)
 
         if tokenizer_name == 'bpe':
-            dna_bpe_path = PATHS['dna_bpe_tokenizer']  # Path('/home/vrcekl/scratch/GFMs/bpe_dna_tokenizer')
+            tokenizer_path = PATHS['tokenizers']
+            tokenizer_name = run_key(type, tokenizer_name, args['data'])  # e.g. dna_bpe_og2, dna_bpe_ncrna, dna_bpe_cdna
+            dna_bpe_path = tokenizer_path / tokenizer_name
             if dna_bpe_path.exists():
                 logger.info(f' loading DNA bpe tokenizer from {dna_bpe_path}')
                 tokenizer = PreTrainedTokenizerFast.from_pretrained(dna_bpe_path)
@@ -155,7 +159,8 @@ def _train(
     logger = args['logger']
     logger.info(f' model config: {bertconfig}')
     N = args['N']
-    save_path = get_run_path(prefix, args['tokenizer_name'], description=args.get('description'))
+    run_key = run_key(prefix, args['tokenizer_name'], args['data'])  # e.g. text_bpe_wiki, dna_bpe_og2, etc.
+    save_path = get_run_path(run_key=run_key, description=args.get('description'))
 
     # last_ckpt = get_last_("")
     # print(f'Resumingf from:', last_ckpt)

@@ -29,10 +29,10 @@ def get_runs_path() -> Path:
     return path
 
 
-def get_run_path(type: str, tokenizer: str, description: str = None) -> Path:
+def get_run_path(run_key: str, description: str = None) -> Path:
     time_start = datetime.now().strftime('%y-%m-%d_%H%M%S')
     description = f'_{description}' if description else ''
-    run_path = get_runs_path() / f'{time_start}_{type}_{tokenizer}{description}'
+    run_path = get_runs_path() / f'{time_start}_{run_key}{description}'
     run_path.mkdir(exist_ok=False)
     return run_path
 
