@@ -17,8 +17,31 @@ After installing `uv`, you can directly run the commands below, it will install 
 
 ## Data
 
-Before training the models, you will need to download the data.
-The OpenGenome2 eukaryotic genic windows are available on HuggingFace, while ncRNA and cDNA data were downloaded from Ensembl. For eexample, for cDNA data, run the `scripts/download_ensembl_cdna.sh` script and save the sequences into `scratch/ensembl_cdna` directory. Then, run `scripts/preprocess_fasta.py` script, which will prepare the FASTA into a HuggingFace dataset. Similar can be donw for ncRNA data.
+Before training the models, you will need to download the data. The OpenGenome2 eukaryotic genic windows are available on HuggingFace, while ncRNA and cDNA data were downloaded from Ensembl. 
+
+### OpenGenome2 data
+
+For downloading the OpenGenome2 data from HuggingFace, you will first need `hf` - HuggingFace hub CLI. Find the installation instructions on their website: https://huggingface.co/docs/huggingface_hub/en/installation.
+
+Once installed, run the following command to download the data:
+```bash
+hf download arcinstitute/opengenome2 \
+  --repo-type dataset \
+  --include "json/pretraining_or_both_phases/eukaryotic_genic_windows/**" \
+  --local-dir opengenome2_data
+```
+### Ensembl data
+
+The easiest way to download the Ensembl data is by running the `scripts/download_ensembl.py`, where you can specify with an argument whether you want to download ncRNA or cDNA. To get the datasets as in the paper, run the following command for cDNA:
+```bash
+python scripts/download_ensembl.py --type cdna --output-dir <output-dir> --dataset-output <dataset-output> --no-dedup
+```
+For ncRNA, we need to allow partial chunks due to the lack of long sequences:
+```bash
+python scripts/download_ensembl.py --type ncrna --output-dir <output-dir> --dataset-output <dataset-output> --chunk-size 3072 --keep-partial --min-length 2048 --no-dedup
+```
+
+In the commands above, `<output-dir>` is a directory where the raw FASTA data will be downloaded, and `<dataset-output>` is a directory where the HuggingFace dataset in the Arrow format will be stored.
 
 ## Usage
 
