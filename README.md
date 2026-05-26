@@ -42,6 +42,7 @@ For ncRNA, we need to allow partial chunks due to the lack of long sequences:
 python scripts/download_ensembl.py --type ncrna --output-dir <output-dir> --dataset-output <dataset-output> --chunk-size 3072 --keep-partial --min-length 2048 --no-dedup
 ```
 
+In the commands above, `<output-dir>` is a directory where the raw FASTA data will be downloaded, and `<dataset-output>` is a directory where the HuggingFace dataset in the Arrow format will be stored.
 
 ## Usage
 
